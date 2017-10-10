@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration dubug="true">
+
+	<!-- ch.qos.logback.core.ConsoleAppender 控制台输出 -->
+	<appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+<!-- 		<filter class="ch.qos.logback.classic.filter.LevelFilter">
+			<level>WARN</level>
+			<onMatch>ACCEPT</onMatch>
+			<onMismatch>DENY</onMismatch>
+		</filter> -->
+		<encoder>
+			<pattern>[%date][%thread][%-5level][%file,%method:%line] %msg%n</pattern>
+			<!-- <pattern>[%-5level] %d{HH:mm:ss.SSS} [%thread] %logger{36} - %msg%n</pattern> -->
+		</encoder>
+	</appender>
+
+	<appender name="DB" class="test.appender.DBXAppender">
+		<connectionSource
+			class="ch.qos.logback.core.db.DriverManagerConnectionSource">
+			<dataSource class="com.mchange.v2.c3p0.ComboPooledDataSource">
+				<driverClass>com.mysql.jdbc.Driver</driverClass>
+				<url>jdbc:mysql://127.0.0.1:3306/logback</url>
+				<user>root</user>
+				<password>root</password>
+			</dataSource>
+		</connectionSource>
+		<nameResolver
+			class="ch.qos.logback.assemble.TableAndColumnNameResolver">
+			<loggingEventTableName>last</loggingEventTableName>
+			<loggingEventExceptionTableName>last_exception</loggingEventExceptionTableName>
+			<loggingEventPropertyTableName>last_property</loggingEventPropertyTableName>
+		</nameResolver>
+		<printStackTrace>true</printStackTrace>
+	</appender>
+	<root level="TRACE">
+		<appender-ref ref="CONSOLE" />
+		<appender-ref ref="DB" />
+	</root>
+
+</configuration>   
