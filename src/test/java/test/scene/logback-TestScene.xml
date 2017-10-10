@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration dubug="true">
+
+	<!-- ch.qos.logback.core.ConsoleAppender 控制台输出 -->
+	<appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+<!-- 		<filter class="ch.qos.logback.classic.filter.LevelFilter">
+			<level>WARN</level>
+			<onMatch>ACCEPT</onMatch>
+			<onMismatch>DENY</onMismatch>
+		</filter> -->
+		<encoder>
+			<pattern>[%date][%thread][%-5level][%file,%method:%line] %msg%n</pattern>
+			<!-- <pattern>[%-5level] %d{HH:mm:ss.SSS} [%thread] %logger{36} - %msg%n</pattern> -->
+		</encoder>
+	</appender>
+
+	<!-- conf file out -->
+	<!-- <appender name="ASSEMBLE" class="ch.qos.logback.core.FileAppender">
+		<filter class="ch.qos.logback.classic.filter.LevelFilter">
+			<level>TRACE</level>
+			<onMatch>ACCEPT</onMatch>
+			<onMismatch>DENY</onMismatch>
+		</filter>
+		<file>logs/ASSEMBLE.log</file>
+		<encoder>
+			<immediateFlush>true</immediateFlush>
+			<pattern>[%date][%thread][%-5level][%file,%method:%line] %msg%n</pattern>
+		</encoder>
+	</appender>
+	<appender name="FILE" class="ch.qos.logback.core.FileAppender">
+		<file>logs/FILE.log</file>
+		<encoder>
+			<pattern>%date [%thread] %-5level %logger - %msg%n</pattern>
+		</encoder>
+	</appender> -->
+	<!-- <appender name="ROLLING"
+		class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+			<fileNamePattern>logs/ROLLING.%d{yyyy-MM-dd}.log</fileNamePattern>
+			<maxHistory>30</maxHistory>
+		</rollingPolicy>
+		<encoder>
+			<pattern>%-4relative [%thread] %-5level %logger{35} - %msg%n</pattern>
+		</encoder>
+	</appender> -->
+	<appender name="TEST" class="ch.qos.logback.assemble.AssembleAppender">
+		<defaultMDCProperties>TRCODE=X;THREADNO=0;userid=U;</defaultMDCProperties>
+		<file>logs/TEST.log</file>	
+		<outputType>RingBuffer</outputType>	
+		<rollingPolicy class="ch.qos.logback.assemble.rolling.NamingAndSizeBasedRollingPolicy">
+			<fileNamePattern>logs/%d{yyyyMMdd}/%X{TRCODE}-%X{userid}-%X{THREADNO}-%i.log</fileNamePattern>
+			<maxFileSize>1MB</maxFileSize>			
+			<maxHistory>5</maxHistory>			
+		</rollingPolicy>
+		
+		<encoder>
+			<pattern>[%date][%thread][%-5level][%file,%method:%line] %msg%n</pattern>
+			<!-- <pattern>[%-5level] %d{HH:mm:ss.SSS} [%thread] %logger{36} - %msg%n</pattern> -->
+		</encoder>
+		
+	</appender>
+	<!-- <appender name="TEST1" class="ch.qos.logback.assemble.AssembleAppender">
+		<defaultMDCProperties>TRCODE=X;THREADNO=0;userid=U;</defaultMDCProperties>
+		<file>logs/TEST1.log</file>		
+		<rollingPolicy class="ch.qos.logback.assemble.rolling.NamingAndSizeBasedRollingPolicy">
+			<fileNamePattern>logs/%d{yyyyMMdd}/TEST1-%X{TRCODE}-%X{userid}-%X{THREADNO}-%i.log</fileNamePattern>
+			<maxFileSize>1MB</maxFileSize>			
+			<maxHistory>5</maxHistory>			
+		</rollingPolicy>
+		<encoder>
+			<charset>GBK</charset>
+			<immediateFlush>false</immediateFlush>
+			<pattern>[%date{yyyy-MM-dd HH:mm:ss}][%thread][%-5level][%logger] - %msg%n</pattern>
+			<pattern>[%date{yyyy-MM-dd HH:mm:ss.SSS}][%thread][%-5level][%logger{36}][%file:%line] %msg%n</pattern>			
+		</encoder>
+	</appender>
+	<appender name="SIFT" class="ch.qos.logback.classic.sift.SiftingAppender">
+		<discriminator>
+			<Key>TRCODE</Key>
+			<DefaultValue>X</DefaultValue>
+		</discriminator>
+		<sift>
+			<appender name="LOG${TRCODE}"
+				class="ch.qos.logback.core.rolling.RollingFileAppender">
+				<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+					<fileNamePattern>logs/%d{yyyyMMdd}/${TRCODE}_%i.log</fileNamePattern>
+					<timeBasedFileNamingAndTriggeringPolicy
+						class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+						<maxFileSize>20MB</maxFileSize>
+					</timeBasedFileNamingAndTriggeringPolicy>
+				</rollingPolicy>
+				<Append>true</Append>
+				<encoder>
+					<ImmediateFlush>false</ImmediateFlush>
+					<pattern>[%date{yyyy-MM-dd HH:mm:ss.SSS}][%thread][%-5level][%logger{36}] %msg%n</pattern>
+					<pattern>[%date{yyyy-MM-dd HH:mm:ss.SSS}][%thread][%-5level][%logger{36}][%file:%line] %msg%n</pattern>
+				</encoder>
+			</appender>
+		</sift>
+	</appender> -->
+<!-- 	<logger name="ch.qos.logback.assemble" level="TRACE" additivity="false">
+		<appender-ref ref="CONSOLE" />
+		<appender-ref ref="ASSEMBLE" />
+	</logger>  
+	<logger name="test.ccbs" level="TRACE" additivity="false">
+		 <appender-ref ref="CONSOLE" />
+		<appender-ref ref="TEST" />
+		<appender-ref ref="SIFT" />
+	</logger>   -->
+	
+	
+	<!-- 日志级别 -->
+	<root level="TRACE">
+		<appender-ref ref="CONSOLE" />
+		<appender-ref ref="TEST" />
+		<!-- <appender-ref ref="TEST1" /> -->
+<!-- 		<appender-ref ref="ROLLING" />
+		<appender-ref ref="FILE" /> -->
+	</root>
+
+</configuration>   

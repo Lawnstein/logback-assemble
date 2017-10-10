@@ -14,6 +14,7 @@ import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.joran.JoranConfigurator;
 import ch.qos.logback.core.joran.spi.JoranException;
 import ch.qos.logback.core.util.StatusPrinter;
+import test.appender.TestDbX;
 import test.scene.tran.BaseAction;
 import test.scene.tran.T15001Action;
 import test.scene.tran.T15002Action;
@@ -25,10 +26,11 @@ import test.scene.tran.T15003Action;
  * @author Lawnstein.Chan
  * @version $Revision:$
  */
-public class TestAssemble {
-	private final static Logger logger = LoggerFactory.getLogger(TestAssemble.class);
-	private final static String config = TestAssemble.class
-			.getResource("/test/scene/logback-" + TestAssemble.class.getSimpleName() + ".xml").getFile();
+public class TestScene {
+	private final static Logger logger = LoggerFactory.getLogger(TestScene.class);
+
+	private final static String config = TestScene.class
+			.getResource("/test/scene/logback-" + TestScene.class.getSimpleName() + ".xml").getFile();
 
 	public static void startThreads(boolean sift) {
 		int T15001N = 20;
@@ -104,7 +106,7 @@ public class TestAssemble {
 		logger.error("log error, " + new Date());
 
 		logger.debug("Alice says hello");
-		//	startThreads(false);
+		// startThreads(false);
 
 		// StatusPrinter.print(lc);
 		StatusPrinter.print(lc);
@@ -117,7 +119,7 @@ public class TestAssemble {
 		} catch (InterruptedException e) {
 		}
 		StatusPrinter.print(lc);
-		 System.exit(0);
+		System.exit(0);
 	}
 
 }

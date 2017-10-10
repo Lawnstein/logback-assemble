@@ -1,7 +1,6 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
-
 	<parent>
 		<groupId>ch.qos.logback</groupId>
 		<artifactId>logback-parent</artifactId>
@@ -16,12 +15,12 @@
 
 	<properties>
 		<logback.version>1.1.7</logback.version>
-		<slf4j.version>1.7.21</slf4j.version>	
+		<slf4j.version>1.7.21</slf4j.version>
 	</properties>
-	
+
 	<dependencyManagement>
 	</dependencyManagement>
-	
+
 	<dependencies>
 		<dependency>
 			<groupId>ch.qos.logback</groupId>
@@ -43,41 +42,8 @@
 			<artifactId>slf4j-api</artifactId>
 			<version>${slf4j.version}</version>
 		</dependency>
-		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>jcl-over-slf4j</artifactId>
-			<version>${slf4j.version}</version>
-		</dependency>
+		<!-- <dependency> <groupId>org.slf4j</groupId> <artifactId>jcl-over-slf4j</artifactId> 
+			<version>${slf4j.version}</version> </dependency> -->
 	</dependencies>
 
-	<build>
-		<sourceDirectory>src</sourceDirectory>
-		<testSourceDirectory>test</testSourceDirectory>
-		<resources>
-			<resource>
-				<directory>src</directory>
-				<excludes>
-					<exclude>**/*.java</exclude>
-				</excludes>
-			</resource>
-		</resources>
-		<testResources>
-			<testResource>
-				<directory>test</directory>
-				<excludes>
-					<exclude>**/*.java</exclude>
-				</excludes>
-			</testResource>
-		</testResources>
-		<plugins>
-			<plugin>
-				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.3</version><!--$NO-MVN-MAN-VER$ -->
-				<configuration>
-					<source />
-					<target />
-				</configuration>
-			</plugin>
-		</plugins>
-	</build>
 </project>
