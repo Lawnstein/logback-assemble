@@ -11,10 +11,12 @@ import java.io.IOException;
 import java.io.Writer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import ch.qos.logback.assemble.rolling.AssembleRollingPolicyBase;
+import ch.qos.logback.classic.Level;
 import ch.qos.logback.core.encoder.Encoder;
 import ch.qos.logback.core.encoder.LayoutWrappingEncoder;
 
@@ -26,10 +28,13 @@ import ch.qos.logback.core.encoder.LayoutWrappingEncoder;
 public class FileItem {
 	public Encoder encoder;
 	public AssembleRollingPolicyBase rollingPolicy;
-	public String name;
+	public String fileName;
+	public String rollingName;
+	public String activeName;
 
 	public Charset charset;
-	public boolean immediateFlush;
+	public boolean append = true;
+	public boolean immediateFlush = false;
 	public File file;
 	public FileChannel channel;
 	public Writer writer;
@@ -37,19 +42,40 @@ public class FileItem {
 	public int curIdx;
 
 	public BlockingQueue<String> mq = null;
+	public boolean discardable = false;
 	public int wkid = -1;
 
-	public FileItem(String name, Encoder encoder, AssembleRollingPolicyBase rollingPolicy) {
+	/*
+	 * public FileItem(String fileName, Encoder encoder,
+	 * AssembleRollingPolicyBase rollingPolicy) { super(); curIdx = -1;
+	 * this.fileName = fileName; this.encoder = encoder; this.rollingPolicy =
+	 * rollingPolicy; if (this.encoder != null && this.encoder instanceof
+	 * LayoutWrappingEncoder) { this.charset = ((LayoutWrappingEncoder)
+	 * this.encoder).getCharset(); this.immediateFlush =
+	 * ((LayoutWrappingEncoder) this.encoder).isImmediateFlush(); } this.mq =
+	 * new LinkedBlockingQueue<String>(); this.wkid = -1; }
+	 */
+
+	public FileItem(String fileName, String rollingName, Encoder encoder, AssembleRollingPolicyBase rollingPolicy) {
 		super();
 		curIdx = -1;
-		this.name = name;
+		this.fileName = fileName;
+		this.rollingName = rollingName;
 		this.encoder = encoder;
 		this.rollingPolicy = rollingPolicy;
+		if (this.rollingPolicy != null) {
+			this.append = this.rollingPolicy.isFileAppend();
+		}
 		if (this.encoder != null && this.encoder instanceof LayoutWrappingEncoder) {
 			this.charset = ((LayoutWrappingEncoder) this.encoder).getCharset();
 			this.immediateFlush = ((LayoutWrappingEncoder) this.encoder).isImmediateFlush();
 		}
-		this.mq = new LinkedBlockingQueue<String>();
+		if (rollingPolicy.getAppenderQueueSize() > 0) {
+			this.mq = new ArrayBlockingQueue<String>(rollingPolicy.getAppenderQueueSize());
+			this.discardable = true;
+		} else {
+			this.mq = new LinkedBlockingQueue<String>();
+		}
 		this.wkid = -1;
 	}
 
@@ -73,12 +99,20 @@ public class FileItem {
 		this.rollingPolicy = rollingPolicy;
 	}
 
-	protected String getName() {
-		return name;
+	public String getFileName() {
+		return fileName;
 	}
 
-	protected void setName(String name) {
-		this.name = name;
+	public void setFileName(String fileName) {
+		this.fileName = fileName;
+	}
+
+	public String getRollingName() {
+		return rollingName;
+	}
+
+	public void setRollingName(String rollingName) {
+		this.rollingName = rollingName;
 	}
 
 	protected Charset getCharset() {
@@ -121,6 +155,14 @@ public class FileItem {
 		this.curIdx = curIdx;
 	}
 
+	public boolean isAppend() {
+		return append;
+	}
+
+	public void setAppend(boolean append) {
+		this.append = append;
+	}
+
 	public boolean isImmediateFlush() {
 		return immediateFlush;
 	}
@@ -153,9 +195,53 @@ public class FileItem {
 		this.mq = mq;
 	}
 
+	public String getActiveName() {
+		return activeName;
+	}
+
+	public void setActiveName(String activeName) {
+		this.activeName = activeName;
+	}
+
+	public boolean isDiscardable() {
+		return discardable;
+	}
+
+	/**
+	 * check whether to discard the current message with level.
+	 * 
+	 * @param level
+	 * @return
+	 */
+	public boolean isQueueFullToDiscard(Level level) {
+		if (!isDiscardable())
+			return false;
+		
+		int rc = this.mq.remainingCapacity();
+		if (rc == 0) {
+			return true;
+		} else if (this.rollingPolicy.isQueueBelowDiscardingThreshold(rc)) {
+			if (level == null)
+				return false;
+			if (level.isGreaterOrEqual(Level.WARN))
+				return true;
+		}
+		return false;
+	}
+
+	public void setDiscardable(boolean discardable) {
+		this.discardable = discardable;
+	}
+
 	public void write(String message) throws IOException {
 		if (writer != null) {
 			writer.write(message);
+		}
+	}
+
+	public void write(MsgItem message) throws IOException {
+		if (writer != null) {
+			writer.write(message.message);
 		}
 	}
 
@@ -180,9 +266,4 @@ public class FileItem {
 		file = null;
 	}
 
-	@Override
-	public String toString() {
-		return "FileItem [name=" + name + ", charset=" + charset + ", file=" + file + ", writer=" + writer
-				+ ", lastModifyTime=" + lastModifyTime + ", curIdx=" + curIdx + "]";
-	}
 }

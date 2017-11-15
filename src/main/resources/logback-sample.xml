@@ -9,7 +9,6 @@
 	<logger name="org.springframework" level="WARN" />
 	<logger name="org.apache" level="WARN" />
 	<logger name="com.ibatis" level="WARN" />
-	<logger name="com.csii.pe.channel.ws.databinding.sdo" level="WARN" />
 	<logger name="com.ibatis.common.jdbc.SimpleDataSource" level="${ThirdLogLevel}" />
 	<logger name="com.ibatis.common.jdbc.ScriptRunner" level="${ThirdLogLevel}" />
 	<logger name="com.ibatis.sqlmap.engine.impl.SqlMapClientDelegate" level="${ThirdLogLevel}" />

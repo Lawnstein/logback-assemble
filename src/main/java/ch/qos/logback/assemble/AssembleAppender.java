@@ -36,9 +36,16 @@ import ch.qos.logback.core.status.ErrorStatus;
  * @version $Revision:$
  */
 public class AssembleAppender<E> extends FileAppender<E> {
-
+	static final int UNDEFINED = -1;
+	
+	/**
+	 * the log filename, support name pattern.
+	 */
 	private String fileName;
 
+	/**
+	 * rolling policy include the filename pattern.
+	 */
 	private AssembleRollingPolicyBase rollingPolicy = null;
 
 	protected ThreadLocal<Boolean> mdcDefaulted = new ThreadLocal<Boolean>() {
@@ -47,20 +54,42 @@ public class AssembleAppender<E> extends FileAppender<E> {
 		}
 	};
 
+	/**
+	 * the default MDC pairs.
+	 */
 	private Map<String, String> defaultMDCProperties = null;
 
 	private String defaultMDCPropertiesStr;
-	
+
+	/**
+	 * the custom thread LogLevel define label name.
+	 */
 	private String defaultMDCLogLevelLabel = "LEVEL";
-	
+
+	/**
+	 * the LogLevel can be setted in defaultMDCProperties.
+	 */
 	private String defaultMDCLogLevelValue = null;
 
 	private AssembleOutputBase output = null;
 	
+	
+	/**
+	 * the max file message queue size, default unlimited.
+	 */
+	private int queueSize = UNDEFINED;
+	
+	/**
+	 * the contition for threshold to discard message , default 20% * $queueSize.<br>
+	 * if remainCapacity less then $discardingThreshold, the discard the TRACE/DEBUG/INFO messages, just keep WARN/ERROR messages.<br>
+	 */
+	private int discardingThreshold = UNDEFINED;
+
 	/**
 	 * RingBuffer && BlockQueue.
 	 */
-	private String outputType = "BlockQueue"; 
+	private String outputType = "RingBuffer";
+//	private String outputType = "BlockQueue";
 
 	static {
 		MDC.put("Assemble", "true");
@@ -80,7 +109,15 @@ public class AssembleAppender<E> extends FileAppender<E> {
 	}
 
 	public void setFile(String fileName) {
-		this.fileName = fileName;
+		this.fileName = fileName == null ? null : fileName.trim();
+		if (this.getRollingPolicy() != null && this.getRollingPolicy() instanceof AssembleRollingPolicyBase)
+			((AssembleRollingPolicyBase) this.getRollingPolicy()).setAppenderFileName(this.getFile());
+	}
+
+	public void setAppend(boolean append) {
+		super.setAppend(append);
+		if (this.getRollingPolicy() != null && this.getRollingPolicy() instanceof AssembleRollingPolicyBase)
+			((AssembleRollingPolicyBase) this.getRollingPolicy()).setFileAppend(this.isAppend());
 	}
 
 	public String getOutputType() {
@@ -99,6 +136,13 @@ public class AssembleAppender<E> extends FileAppender<E> {
 		this.rollingPolicy = rollingPolicy;
 		this.initOutput();
 		this.output.setRollingPolicy(this.rollingPolicy);
+		if (this.getFile() != null)
+			rollingPolicy.setAppenderFileName(this.getFile());
+		this.rollingPolicy.setFileAppend(this.isAppend());
+		if (this.queueSize != UNDEFINED)
+			this.rollingPolicy.setAppenderQueueSize(this.queueSize);
+		if (this.discardingThreshold != UNDEFINED)
+			this.rollingPolicy.setAppenderDiscardingThreshold(this.discardingThreshold);
 	}
 
 	public String getDefaultMDCLogLevelLabel() {
@@ -134,7 +178,7 @@ public class AssembleAppender<E> extends FileAppender<E> {
 			this.addInfo(this + " OutputType " + getOutputType());
 		}
 	}
-	
+
 	public Map<String, String> getDefaultMDCProperties() {
 		return defaultMDCProperties;
 	}
@@ -169,6 +213,32 @@ public class AssembleAppender<E> extends FileAppender<E> {
 				this.addInfo("Initializing set MDC " + k + "=" + v + " in " + Thread.currentThread().getName());
 				MDC.put(k, v);
 			}
+		}
+	}
+
+	public int getQueueSize() {
+		return queueSize;
+	}
+
+	public void setQueueSize(int queueSize) {
+		this.queueSize = queueSize;
+		if (this.discardingThreshold == UNDEFINED)
+			this.discardingThreshold = this.queueSize / 5;
+		
+		if (this.rollingPolicy != null) {
+			this.rollingPolicy.setAppenderQueueSize(this.queueSize);
+			this.rollingPolicy.setAppenderDiscardingThreshold(this.discardingThreshold);
+		}
+	}
+
+	public int getDiscardingThreshold() {
+		return discardingThreshold;
+	}
+
+	public void setDiscardingThreshold(int discardingThreshold) {
+		this.discardingThreshold = discardingThreshold;
+		if (this.rollingPolicy != null) {
+			this.rollingPolicy.setAppenderDiscardingThreshold(this.discardingThreshold);
 		}
 	}
 
@@ -262,7 +332,8 @@ public class AssembleAppender<E> extends FileAppender<E> {
 			setThreadDefaultMDC((ILoggingEvent) eventObject);
 			String msg = doEncode(eventObject);
 			String fileName = doActiveFileName(eventObject);
-			output.write((ILoggingEvent) eventObject, fileName, msg);
+			String rollingName = doRollingFileName(eventObject, fileName);
+			output.write((ILoggingEvent) eventObject, fileName, rollingName, msg);
 		} catch (Exception e) {
 			addError("append expception", e);
 		}
@@ -304,12 +375,18 @@ public class AssembleAppender<E> extends FileAppender<E> {
 	}
 
 	public String doActiveFileName(E eventObject) {
-		if (rollingPolicy != null) {
+		if (this.rollingPolicy != null)
 			return this.rollingPolicy.getActiveFileName((ILoggingEvent) eventObject);
-		} else if (this.fileName != null && this.fileName.length() > 0) {
+		else
 			return this.fileName;
-		}
-		return null;
+	}
+
+	public String doRollingFileName(E eventObject, String activeFileName) {
+		if (rollingPolicy == null)
+			return null;
+		if (rollingPolicy.isActiveSamePattern())
+			return activeFileName;
+		return this.rollingPolicy.getRollingFileName((ILoggingEvent) eventObject);
 	}
 
 	public static String getStackTrace(Throwable e) {

@@ -17,6 +17,8 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 
 public class AssembleMDCConverter extends ClassicConverter {
 
+    public final static String CONVERTER_KEY = "X";
+    
 	private String key;
 	private String defaultValue = "";
 

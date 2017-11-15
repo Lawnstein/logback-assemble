@@ -186,10 +186,15 @@ public class RingBufferedOutput extends AssembleOutputBase {
 	 */
 	@Override
 	public void write(ILoggingEvent event, String fileName, String message) {
+		write(event, fileName, null, message);
+	}
+
+	@Override
+	public void write(ILoggingEvent event, String fileName, String rollingFileName, String message) {
 		if (!alived)
 			activate();
 
-		MsgItem mn = new MsgItem(fileName, message, encoder, rollingPolicy);
+		MsgItem mn = new MsgItem(fileName, rollingFileName, message, event.getLevel(), encoder, rollingPolicy);
 		long c = msgWriteCursor.incrementAndGet();
 		if (c == Long.MAX_VALUE) {
 			msgWriteCursor.set(0L);

@@ -9,6 +9,7 @@ package ch.qos.logback.assemble.rolling;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import ch.qos.logback.assemble.pattern.AssembleMDCConverter;
 import ch.qos.logback.classic.pattern.MDCConverter;
@@ -34,11 +35,12 @@ import ch.qos.logback.core.spi.ScanException;
  */
 public class FileNamePattern extends ContextAwareBase {
 
+	static final Map<String, Boolean> FILENAMEPATTERN_DYNAMIC = new ConcurrentHashMap<String, Boolean>();
 	static final Map<String, String> CONVERTER_MAP = new HashMap<String, String>();
 	static {
 		CONVERTER_MAP.put(IntegerTokenConverter.CONVERTER_KEY, IntegerTokenConverter.class.getName());
 		CONVERTER_MAP.put(DateTokenConverter.CONVERTER_KEY, DateTokenConverter.class.getName());
-		CONVERTER_MAP.put("X", AssembleMDCConverter.class.getName());
+		CONVERTER_MAP.put(AssembleMDCConverter.CONVERTER_KEY, AssembleMDCConverter.class.getName());
 	}
 
 	String pattern;
@@ -77,6 +79,26 @@ public class FileNamePattern extends ContextAwareBase {
 
 	public String toString() {
 		return pattern;
+	}
+	
+	public static boolean isDynamicPattern(String fileNamePattern) {
+		if (fileNamePattern == null || fileNamePattern.length() == 0)
+			return false;
+		Boolean b = FILENAMEPATTERN_DYNAMIC.get(fileNamePattern);
+		if (b == null) {
+			for (String k : CONVERTER_MAP.keySet()) {
+				if (!k.equals("%" + IntegerTokenConverter.CONVERTER_KEY)) {
+					if (fileNamePattern.contains("%" + k)) {
+						b = Boolean.TRUE;
+						break;
+					}
+				}
+			}
+			if (b == null)
+				b = Boolean.FALSE;
+			FILENAMEPATTERN_DYNAMIC.put(fileNamePattern, b);
+		}
+		return b;
 	}
 
 	public DateTokenConverter<Object> getPrimaryDateTokenConverter() {

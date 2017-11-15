@@ -51,6 +51,8 @@ public abstract class AssembleOutputBase extends ContextAwareBase {
 	}
 
 	abstract public void write(ILoggingEvent event, String fileName, String message);
+	
+	abstract public void write(ILoggingEvent event, String fileName, String rollingFileName, String message);
 
 	abstract public void stop();
 

@@ -58,128 +58,149 @@ public class CentralizedFileWriter extends ContextAwareBase {
 		return instance;
 	}
 
-	public void reopenFile(FileItem f) throws Exception {
+	private void openFile(FileItem f) throws Exception {
+		openFile(f, false);
+	}
+
+	private void openFile(FileItem f, boolean forceClearContent) throws Exception {
+		f.activeName = f.getFileName();
+		if (f.activeName.indexOf("%i") > 0) {
+			f.activeName = f.activeName.replaceFirst("%i", "0");
+		}
+		f.file = new File(f.activeName);
+		FileUtil.createMissingParentDirectories(f.file);
+		FileOutputStream fos = null;
+		if (!f.append || forceClearContent) {
+			fos = new FileOutputStream(f.file, false);
+		} else {
+			fos = new FileOutputStream(f.file, true);
+		}
+		f.channel = fos.getChannel();
+		if (f.charset == null)
+			f.writer = new BufferedWriter(new OutputStreamWriter(fos));
+		else
+			f.writer = new BufferedWriter(new OutputStreamWriter(fos, f.charset.name()));
+		this.addInfo("Open log file " + f.fileName + (f.charset == null ? "" : " " + f.charset.name()));
+	}
+
+	private void closeFile(FileItem f) throws Exception {
+		f.close();
+	}
+
+	public void checkAndOpenFile(FileItem f) throws Exception {
 		if (f.file == null) {
-			/**
-			 * first time open the file.
-			 */
-			String realFileName = null;
-			int currIndex = -1;
-			int lastIndex = -1;
-			if (f.name.indexOf("%i") > 0) {
-				// check wether the file with index has exists.
-				// NamingAndSizeBasedRollingPolicy extends
-				// AssembleRollingPolicyBase
-				// AssembleRollingPolicyBase rollingPolicy;
-				if (f.rollingPolicy instanceof NamingAndSizeBasedRollingPolicy) {
-					NamingAndSizeBasedRollingPolicy nabRollingPolicy = (NamingAndSizeBasedRollingPolicy) f.rollingPolicy;
-					if (nabRollingPolicy.getMaxFileSize() == null)
-						currIndex = 0;
-					else {
-						if (nabRollingPolicy.getMaxHistory() > 0)
-							lastIndex = nabRollingPolicy.getMaxHistory();
-						for (int i = 0; i >= 0; i++) {
-							File check = new File(f.name.replaceFirst("%i", (i + "")));
-							if (!check.exists() || check.length() < nabRollingPolicy.getMaxFileSize().getSize()) {
-								currIndex = i;
+			f.curIdx = -1;	
+			openFile(f);
+		}		
+
+//		if (f.file.getFreeSpace() == 0) {
+//			this.addError("No space left in " + f.file.getParent() + " to write log.");
+//		}
+		
+		if (f.rollingPolicy != null && f.rollingPolicy instanceof NamingAndSizeBasedRollingPolicy) {
+			NamingAndSizeBasedRollingPolicy nasRollingPolicy = (NamingAndSizeBasedRollingPolicy) f.rollingPolicy;
+
+			if (nasRollingPolicy.getMaxFileSize() != null
+					&& f.channel.size() >= nasRollingPolicy.getMaxFileSize().getSize()) {
+
+				closeFile(f);
+				
+				if (nasRollingPolicy.getMaxHistory() <= 0) {
+					openFile(f, true);
+				} else if (f.rollingName == null || f.rollingName.length() == 0 || (!f.rollingName.contains("%i") && f.rollingName.equals(f.activeName))) {
+					openFile(f, true);
+				} else if (!f.rollingName.contains("%i") && !f.rollingName.equals(f.activeName)) {
+					f.rollingPolicy.getRenameUtil().rename(f.activeName, f.rollingName);
+					openFile(f);
+				} else {
+					closeFile(f);
+					
+					/**
+					 * rename the history files.
+					 */
+					if (f.curIdx < 0) {
+						f.curIdx = 0;
+						for (int i = 1; i <= nasRollingPolicy.getMaxHistory(); i++) {
+							File check = new File(f.rollingName.replaceFirst("%i", (i + "")));
+							if (!check.exists()) {
 								check = null;
 								break;
 							}
 							check = null;
-							if (lastIndex > 0 && i >= (lastIndex - 1)) {
-								break;
-							}
+							f.curIdx = i;
 						}
 					}
-				}
-				if (currIndex < 0)
-					currIndex = 0;
-				else
-					f.curIdx = currIndex;
-				realFileName = f.name.replaceFirst("%i", (currIndex + ""));
-			} else {
-				realFileName = f.name;
-				f.curIdx = -1;
-			}
-
-			f.file = new File(realFileName);
-			FileUtil.createMissingParentDirectories(f.file);
-			FileOutputStream fos = new FileOutputStream(f.file, true);
-			f.channel = fos.getChannel();
-			if (f.charset == null)
-				f.writer = new BufferedWriter(new OutputStreamWriter(fos));
-			else
-				f.writer = new BufferedWriter(new OutputStreamWriter(fos, f.charset.name()));
-			this.addInfo("Open log file " + f.name + (f.charset == null ? "" : " " + f.charset.name()));
-		} else {
-			/**
-			 * second reopen the file.
-			 */
-			if (f.curIdx < 0)
-				return;
-
-			if (f.file.getFreeSpace() == 0) {
-				this.addError("No space left in " + f.file.getParent() + " to write log.");
-			}
-
-			// check wether the file with index has exists.
-			// NamingAndSizeBasedRollingPolicy extends AssembleRollingPolicyBase
-			// AssembleRollingPolicyBase rollingPolicy;
-			if (f.rollingPolicy instanceof NamingAndSizeBasedRollingPolicy) {
-				NamingAndSizeBasedRollingPolicy nabRollingPolicy = (NamingAndSizeBasedRollingPolicy) f.rollingPolicy;
-
-				if (nabRollingPolicy.getMaxFileSize() != null
-						&& f.channel.size() >= nabRollingPolicy.getMaxFileSize().getSize()) {
-					f.curIdx++;
-					f.close();
-					if (nabRollingPolicy.getMaxHistory() > 0) {
-						if (f.curIdx > nabRollingPolicy.getMaxHistory()) {
-							for (int j = 1; j < f.curIdx; j++) {
-								String pre = f.name.replaceFirst("%i", (j - 1) + "");
-								String nxt = f.name.replaceFirst("%i", (j + ""));
-								f.rollingPolicy.getRenameUtil().rename(nxt, pre);
+					String pre = null;
+					String nxt = null;
+					if (f.curIdx > 0) {
+						for (int j = (f.curIdx >= nasRollingPolicy.getMaxHistory() ? nasRollingPolicy.getMaxHistory() : f.curIdx + 1); j > 1; j--) {
+							pre = f.rollingName.replaceFirst("%i", (j - 1) + "");
+							nxt = f.rollingName.replaceFirst("%i", (j + ""));
+							File pref = new File(pre);
+							if (pref.exists()) {
+								File nxtf = new File(nxt);
+								if (nxtf.exists())
+									nxtf.getAbsoluteFile().delete();
+								nxtf = null;
+								f.rollingPolicy.getRenameUtil().rename(pre,nxt);
 							}
-							f.curIdx--;
-						}
+							pref = null;
+						}						
 					}
-
-					f.file = new File(f.name.replaceFirst("%i", (f.curIdx + "")));
-					FileUtil.createMissingParentDirectories(f.file);
-					FileOutputStream fos = new FileOutputStream(f.file, true);
-					f.channel = fos.getChannel();
-					if (f.charset == null)
-						f.writer = new BufferedWriter(new OutputStreamWriter(fos));
-					else
-						f.writer = new BufferedWriter(new OutputStreamWriter(fos, f.charset.name()));
-
-					this.addInfo("Reopen log file " + f.name + (f.charset == null ? "" : " " + f.charset.name()));
+					
+					/**
+					 * rename current log file.
+					 */
+					pre = f.activeName;
+					nxt = f.rollingName.replaceFirst("%i", "1");
+					File pref = new File(pre);
+					if (pref.exists()) {
+						File nxtf = new File(nxt);
+						if (nxtf.exists())
+							nxtf.getAbsoluteFile().delete();
+						nxtf = null;
+						f.rollingPolicy.getRenameUtil().rename(pre,nxt);
+					}
+					if (f.curIdx < nasRollingPolicy.getMaxHistory())
+						f.curIdx++;
+					
+					openFile(f);
 				}
+
+				this.addInfo("Reopen log file " + f.fileName + (f.charset == null ? "" : " " + f.charset.name()));
 			}
 		}
 	}
 
 	public void doWriteQue(List<MsgItem> messages) {
-		//this.addInfo("doWriteQue " + messages.size() + " message(s).");
 		for (MsgItem msg : messages) {
-			FileItem f = outputFileMap.get(msg.getFileName());
+			String fileName = msg.getFileName() == null ? msg.getRollingName() : msg.getFileName();
+			String rollingName = msg.getRollingName() == null ? msg.getFileName() : msg.getRollingName();
+			FileItem f = outputFileMap.get(fileName);
 			try {
 				if (f == null) {
 					synchronized (outputFileMap) {
-						f = new FileItem(msg.getFileName(), msg.encoder, msg.rollingPolicy);
-						outputFileMap.put(f.name, f);
+						f = outputFileMap.get(fileName);
+						if (f == null) {
+							f = new FileItem(fileName, rollingName, msg.encoder, msg.rollingPolicy);
+							outputFileMap.put(fileName, f);
+						}
 					}
 				}
-				f.mq.put(msg.getMessage());
+				if (!f.isQueueFullToDiscard(msg.getLevel())) {
+					f.mq.put(msg.getMessage());
+				}
 			} catch (Exception e) {
-				this.addError("Create  FileItem for log file " + f.name + " expception : " + msg.getFileName(), e);
+				this.addError("Create  FileItem for log file " + f.fileName + " expception : " + msg.getFileName(), e);
 			}
 		}
 	}
 
 	private void doWriteFile(int wkid) {
 		List<String> messages = new ArrayList<String>();
+		long writs = 0L;
 		while (true) {
-			long wrts = 0L;
+			writs = 0L;
 			Iterator<String> itrf = outputFileMap.keySet().iterator();
 			while (itrf.hasNext()) {
 				FileItem fi = outputFileMap.get(itrf.next());
@@ -204,24 +225,26 @@ public class CentralizedFileWriter extends ContextAwareBase {
 					fi.mq.drainTo(messages);
 				}
 
-				//	this.addInfo("doWriteFile-" + wkid + " poll " + messages.size() + " message(s)...");
+				// this.addInfo("doWriteFile-" + wkid + " poll " +
+				// messages.size() + " message(s)...");
 				if (messages.size() > 0) {
 					/**
 					 * write the messages to log file.
 					 */
 					try {
 						for (String m : messages) {
-							reopenFile(fi);
+							checkAndOpenFile(fi);
 							fi.write(m);
 							if (fi.immediateFlush)
 								fi.flush();
 						}
 					} catch (Exception e) {
-						//this.addError("doWriteFile-" + wkid + " message failed. " + e);
+						// this.addError("doWriteFile-" + wkid + " message
+						// failed. " + e);
 					}
 					messages.clear();
 					fi.lastModifyTime = System.currentTimeMillis();
-					wrts += messages.size();
+					writs += messages.size();
 				} else if (alived) {
 					/**
 					 * check the idle time.
@@ -234,9 +257,9 @@ public class CentralizedFileWriter extends ContextAwareBase {
 						if (fi.isOpened()) {
 							try {
 								fi.close();
-								addInfo("Close log file " + fi.name);
+								addInfo("Close log file " + fi.fileName);
 							} catch (IOException e) {
-								addError("flushAndClose log file " + fi.name + " exception", e);
+								addError("flushAndClose log file " + fi.fileName + " exception", e);
 							}
 						}
 					}
@@ -244,7 +267,7 @@ public class CentralizedFileWriter extends ContextAwareBase {
 						/**
 						 * unregister the log file.
 						 */
-						outputFileMap.remove(fi.name);
+						outputFileMap.remove(fi.fileName);
 					}
 				}
 
@@ -252,7 +275,7 @@ public class CentralizedFileWriter extends ContextAwareBase {
 					try {
 						fi.close();
 					} catch (IOException e) {
-						addError("flushAndClose log file " + fi.name + " exception", e);
+						addError("flushAndClose log file " + fi.fileName + " exception", e);
 					}
 				}
 				fi.wkid = -1;
@@ -260,11 +283,11 @@ public class CentralizedFileWriter extends ContextAwareBase {
 
 			if (alived) {
 				try {
-					if (wrts == 0) {
+					if (writs == 0) {
 						Thread.sleep(1000 + wkid);
-					} else if (wrts < pollBatchSize / 2) {
+					} else if (writs < pollBatchSize / 2) {
 						Thread.sleep(100 + wkid);
-					} else if (wrts < pollBatchSize) {
+					} else if (writs < pollBatchSize) {
 						Thread.sleep(10 + wkid);
 					}
 				} catch (InterruptedException e) {
@@ -285,10 +308,11 @@ public class CentralizedFileWriter extends ContextAwareBase {
 	public void start() {
 		registeredAppenders++;
 		if (writeWorkers != null) {
-			//addInfo("CentralizedFileWriter started， registered" + registeredAppenders + "Appenders ");
+			// addInfo("CentralizedFileWriter started， registered" +
+			// registeredAppenders + "Appenders ");
 			return;
 		}
-		
+
 		synchronized (outputFileMap) {
 			if (writeWorkers != null)
 				return;
@@ -317,7 +341,6 @@ public class CentralizedFileWriter extends ContextAwareBase {
 		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
 			public void run() {
 				addInfo("shutdown Logback-Assemble");
-				// System.err.println("shutdown Logback-Assemble");
 				alived = false;
 
 				int ws = writeWorkers.length;
@@ -348,7 +371,8 @@ public class CentralizedFileWriter extends ContextAwareBase {
 				addInfo("Destroyer over.");
 			}
 		}, "Logback-AssembleDestroyer"));
-		// addInfo("CentralizedFileWriter started， registered" + registeredAppenders + "Appenders ");
+		// addInfo("CentralizedFileWriter started， registered" +
+		// registeredAppenders + "Appenders ");
 	}
 
 	public void stop() {

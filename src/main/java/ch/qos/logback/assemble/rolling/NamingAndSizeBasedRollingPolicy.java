@@ -6,6 +6,8 @@
  */
 package ch.qos.logback.assemble.rolling;
 
+import java.util.HashMap;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,7 +28,7 @@ public class NamingAndSizeBasedRollingPolicy extends AssembleRollingPolicyBase {
 
 	private String maxFileSizeAsString;
 
-	private int maxHistory = -1;
+	private int maxHistory = Integer.MAX_VALUE;
 
 	// TimeBasedFileNamingAndTriggeringPolicyBase
 	// getCurrentPeriodsFileNameWithoutCompressionSuffix
@@ -71,7 +73,7 @@ public class NamingAndSizeBasedRollingPolicy extends AssembleRollingPolicyBase {
 	 */
 	@Override
 	public String getActiveFileName() {
-		String rawFileName = fileNamePatternWCS.convert(null);
+		String rawFileName = getActiveFileName(null);
 		int i = rawFileName.indexOf("#{");
 		int j = rawFileName.indexOf("}");
 		while (i >= 0 && j > i) {
@@ -86,10 +88,31 @@ public class NamingAndSizeBasedRollingPolicy extends AssembleRollingPolicyBase {
 		return rawFileName;
 	}
 
+	private String getEffectFileName(ILoggingEvent event, String fileNamePatternCS) {
+		if (!isDynamicPattern(fileNamePatternCS))
+			return fileNamePatternCS;
+		
+		FileNamePattern fileNamePattern = this.fileNamePatternWCSes.get(fileNamePatternCS);
+		if (fileNamePattern == null) {
+			fileNamePattern = new FileNamePattern(fileNamePatternCS, this.context);
+			this.fileNamePatternWCSes.put(fileNamePatternCS, fileNamePattern);
+		}
+		return fileNamePattern.convert(event);
+	}
+
 	@Override
 	public String getActiveFileName(ILoggingEvent event) {
-		String rawFileName = fileNamePatternWCS.convert(event);
-		return rawFileName;
+		if (this.getAppenderFileName() != null)
+			return getEffectFileName(event, this.getAppenderFileName());
+		else
+			return getEffectFileName(event, this.getFileNamePattern());
+	}
+
+	@Override
+	public String getRollingFileName(ILoggingEvent event) {
+		if (this.getFileNamePattern() != null)
+			return getEffectFileName(event, this.getFileNamePattern());
+		return null;
 	}
 
 	/*
@@ -104,8 +127,8 @@ public class NamingAndSizeBasedRollingPolicy extends AssembleRollingPolicyBase {
 	public void start() {
 		this.renameUtil.setContext(this.context);
 
+		this.fileNamePatternWCSes = new HashMap<String, FileNamePattern>();
 		if (this.fileNamePatternStr != null) {
-			fileNamePatternWCS = new FileNamePattern(this.fileNamePatternStr, this.context);
 			determineCompressionMode();
 		} else {
 			addWarn("The FileNamePattern option must be set before using TimeBasedRollingPolicy. ");
@@ -117,39 +140,18 @@ public class NamingAndSizeBasedRollingPolicy extends AssembleRollingPolicyBase {
 		this.compressor = new Compressor(this.compressionMode);
 		this.compressor.setContext(this.context);
 
-		addInfo("Will use the pattern " + this.fileNamePatternWCS + " for the active file");
-
-		/*
-		 * if (this.compressionMode == CompressionMode.ZIP) { String
-		 * zipEntryFileNamePatternStr =
-		 * transformFileNamePattern2ZipEntry(this.fileNamePatternStr);
-		 * this.zipEntryFileNamePattern = new
-		 * FileNamePattern(zipEntryFileNamePatternStr, this.context); }
-		 * 
-		 * if (this.timeBasedFileNamingAndTriggeringPolicy == null) {
-		 * this.timeBasedFileNamingAndTriggeringPolicy = new
-		 * DefaultTimeBasedFileNamingAndTriggeringPolicy(); }
-		 * this.timeBasedFileNamingAndTriggeringPolicy.setContext(this.context);
-		 * this.timeBasedFileNamingAndTriggeringPolicy.setTimeBasedRollingPolicy
-		 * (this); this.timeBasedFileNamingAndTriggeringPolicy.start();
-		 * 
-		 * if (!(this.timeBasedFileNamingAndTriggeringPolicy.isStarted())) {
-		 * addWarn(
-		 * "Subcomponent did not start. TimeBasedRollingPolicy will not start."
-		 * ); return; }
-		 * 
-		 * if (this.maxHistory != 0) { this.archiveRemover =
-		 * this.timeBasedFileNamingAndTriggeringPolicy.getArchiveRemover();
-		 * this.archiveRemover.setMaxHistory(this.maxHistory);
-		 * this.archiveRemover.setTotalSizeCap(this.totalSizeCap.getSize()); if
-		 * (this.cleanHistoryOnStart) { addInfo("Cleaning on start up"); Date
-		 * now = new
-		 * Date(this.timeBasedFileNamingAndTriggeringPolicy.getCurrentTime());
-		 * this.cleanUpFuture = this.archiveRemover.cleanAsynchronously(now); }
-		 * } else if (this.totalSizeCap.getSize() != 0L) { addWarn(
-		 * "'maxHistory' is not set, ignoring 'totalSizeCap' option with value ["
-		 * + this.totalSizeCap + "]"); }
-		 */
+		addInfo("Will use the pattern " + this.fileNamePatternWCSes + " for the active file");
+		
+//		this.fileNamePatternStr = Compressor.computeFileNameStrWithoutCompSuffix(fileNamePatternStr, compressionMode);
+//        fileNamePatternWithoutCompSuffix = new FileNamePattern(Compressor.computeFileNameStrWithoutCompSuffix(fileNamePatternStr, compressionMode), this.context);
+//
+//        addInfo("Will use the pattern " + fileNamePatternWithoutCompSuffix + " for the active file");
+//
+//        if (compressionMode == CompressionMode.ZIP) {
+//            String zipEntryFileNamePatternStr = transformFileNamePattern2ZipEntry(fileNamePatternStr);
+//            zipEntryFileNamePattern = new FileNamePattern(zipEntryFileNamePatternStr, context);
+//        }
+        
 		super.start();
 	}
 

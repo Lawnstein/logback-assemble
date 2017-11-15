@@ -8,6 +8,7 @@ package ch.qos.logback.assemble.output;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -21,7 +22,7 @@ public class BlockingQueuedOutput extends AssembleOutputBase {
 	private static BlockingQueue<MsgItem> msgQueue = null;
 
 	private int pollBatchSize = 100;
-	                                                 
+
 	private int queueCapacity = 819200;
 
 	private static Thread pickWorker = null;
@@ -79,11 +80,11 @@ public class BlockingQueuedOutput extends AssembleOutputBase {
 		if (alived)
 			return;
 
-		// if (msgQueue == null)
-		// msgQueue = new ArrayBlockingQueue(queueCapacity);
-
 		if (msgQueue == null)
-			msgQueue = new LinkedBlockingQueue<MsgItem>(queueCapacity);
+			msgQueue = new ArrayBlockingQueue(queueCapacity);
+
+		// if (msgQueue == null)
+		// msgQueue = new LinkedBlockingQueue<MsgItem>(queueCapacity);
 
 		alived = true;
 
@@ -134,11 +135,17 @@ public class BlockingQueuedOutput extends AssembleOutputBase {
 	 */
 	@Override
 	public void write(ILoggingEvent event, String fileName, String message) {
+		write(event, fileName, null, message);
+	}
+
+	@Override
+	public void write(ILoggingEvent event, String fileName, String rollingFileName, String message) {
 		if (!alived)
 			activate();
 
 		try {
-			this.msgQueue.put(new MsgItem(fileName, message, encoder, rollingPolicy));
+			this.msgQueue
+					.put(new MsgItem(fileName, rollingFileName, message, event.getLevel(), encoder, rollingPolicy));
 		} catch (InterruptedException e) {
 			addError("write InterruptedException", e);
 		}
