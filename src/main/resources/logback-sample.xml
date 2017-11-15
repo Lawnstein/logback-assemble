@@ -44,7 +44,10 @@
 	</appender>
 	<appender name="TRAN" class="ch.qos.logback.assemble.AssembleAppender">
 		<!-- <outputType>RingBuffer</outputType> -->
+		<!-- <outputType>BlockQueue</outputType> -->
 		<defaultMDCProperties>TRCODE=X;THREADNO=0;</defaultMDCProperties>
+		<queueSize>10000</queueSize>
+		<discardingThreshold>200</discardingThreshold>
 		<rollingPolicy class="ch.qos.logback.assemble.rolling.NamingAndSizeBasedRollingPolicy">
 			<fileNamePattern>log/${APPID}/%d{yyyyMMdd}/%X{TRCODE}_%i</fileNamePattern>
 			<maxFileSize>20MB</maxFileSize>
