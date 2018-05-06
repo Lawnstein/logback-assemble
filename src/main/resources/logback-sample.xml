@@ -34,7 +34,7 @@
 			<onMismatch>DENY</onMismatch>
 		</filter>
 		<rollingPolicy class="ch.qos.logback.assemble.rolling.NamingAndSizeBasedRollingPolicy">
-			<fileNamePattern>log/${APPID}/%d{yyyyMMdd}/ERROR_%i</fileNamePattern>
+			<fileNamePattern>logs/${APPID}/%d{yyyyMMdd}/ERROR_%i</fileNamePattern>
 			<maxFileSize>20MB</maxFileSize>
 		</rollingPolicy>
 		<encoder>
@@ -47,9 +47,10 @@
 		<!-- <outputType>BlockQueue</outputType> -->
 		<defaultMDCProperties>TRCODE=X;THREADNO=0;</defaultMDCProperties>
 		<queueSize>10000</queueSize>
-		<discardingThreshold>200</discardingThreshold>
+		<discardingThreshold>200</discardingThreshold>		
+		<file>logs/${APPID}/%d{yyyyMMdd}/%X{TRCODE:-TRCODE}_%X{THREADNO:-THREADNO}.log</file>
 		<rollingPolicy class="ch.qos.logback.assemble.rolling.NamingAndSizeBasedRollingPolicy">
-			<fileNamePattern>log/${APPID}/%d{yyyyMMdd}/%X{TRCODE}_%i</fileNamePattern>
+			<fileNamePattern>logs/${APPID}/%d{yyyyMMdd}/%X{TRCODE:-TRCODE}_%X{THREADNO:-THREADNO}_%i.log.zip</fileNamePattern>
 			<maxFileSize>20MB</maxFileSize>
 			<!-- <maxHistory>100</maxHistory> -->
 		</rollingPolicy>

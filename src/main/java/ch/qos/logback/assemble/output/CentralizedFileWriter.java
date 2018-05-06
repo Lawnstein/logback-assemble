@@ -20,6 +20,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 import ch.qos.logback.assemble.rolling.NamingAndSizeBasedRollingPolicy;
+import ch.qos.logback.core.rolling.helper.CompressionMode;
+import ch.qos.logback.core.rolling.helper.Compressor;
 import ch.qos.logback.core.spi.ContextAwareBase;
 import ch.qos.logback.core.util.FileUtil;
 
@@ -32,6 +34,8 @@ public class CentralizedFileWriter extends ContextAwareBase {
 	protected static int availProcessors = Runtime.getRuntime().availableProcessors();
 
 	protected static Map<String, FileItem> outputFileMap = new ConcurrentHashMap<String, FileItem>();
+
+	protected static Map<CompressionMode, Compressor> compressorMap = new ConcurrentHashMap<CompressionMode, Compressor>();
 
 	protected static CentralizedFileWriter instance = null;
 
@@ -71,6 +75,20 @@ public class CentralizedFileWriter extends ContextAwareBase {
 		return instance;
 	}
 
+	private Compressor getCompressor(CompressionMode compressionMode) {
+		Compressor compressor = compressorMap.get(compressionMode);
+		if (compressor == null) {
+			compressor = new Compressor(compressionMode);
+			compressor.setContext(this.getContext());
+			compressorMap.put(compressionMode, compressor);
+		}
+		return compressor;
+	}
+
+	private String getSimpleFilename(String fileName) {
+		return new File(fileName).getName();
+	}
+	
 	private void openFile(FileItem f) throws Exception {
 		openFile(f, false);
 	}
@@ -79,6 +97,12 @@ public class CentralizedFileWriter extends ContextAwareBase {
 		f.activeName = f.getFileName();
 		if (f.activeName.indexOf("%i") > 0) {
 			f.activeName = f.activeName.replaceFirst("%i", "0");
+		}
+		if (f.compressionMode != CompressionMode.NONE) {
+			if (f.activeName.endsWith(".gz"))
+				f.activeName = f.activeName.substring(0, f.activeName.length() - 3);
+			else if (f.activeName.endsWith(".zip"))
+				f.activeName = f.activeName.substring(0, f.activeName.length() - 4);
 		}
 		f.file = new File(f.activeName);
 		FileUtil.createMissingParentDirectories(f.file);
@@ -106,11 +130,6 @@ public class CentralizedFileWriter extends ContextAwareBase {
 			openFile(f);
 		}
 
-		// if (f.file.getFreeSpace() == 0) {
-		// this.addError("No space left in " + f.file.getParent() + " to write
-		// log.");
-		// }
-
 		if (f.rollingPolicy != null && f.rollingPolicy instanceof NamingAndSizeBasedRollingPolicy) {
 			NamingAndSizeBasedRollingPolicy nasRollingPolicy = (NamingAndSizeBasedRollingPolicy) f.rollingPolicy;
 
@@ -118,6 +137,20 @@ public class CentralizedFileWriter extends ContextAwareBase {
 					&& f.channel.size() >= nasRollingPolicy.getMaxFileSize().getSize()) {
 
 				closeFile(f);
+
+				if (f.compressionMode != CompressionMode.NONE) {
+					getCompressor(f.compressionMode).compress(f.activeName, f.activeName, getSimpleFilename(f.activeName));
+					String nameOfCompressedFile = f.activeName;
+					switch (f.compressionMode) {
+					case GZ:
+						nameOfCompressedFile += ".gz";
+						break;
+					case ZIP:
+						nameOfCompressedFile += ".zip";
+						break;
+					}
+					f.rollingPolicy.getRenameUtil().rename(nameOfCompressedFile, f.activeName);
+				}
 
 				if (nasRollingPolicy.getMaxHistory() <= 0) {
 					openFile(f, true);
@@ -128,8 +161,6 @@ public class CentralizedFileWriter extends ContextAwareBase {
 					f.rollingPolicy.getRenameUtil().rename(f.activeName, f.rollingName);
 					openFile(f);
 				} else {
-					closeFile(f);
-
 					/**
 					 * rename the history files.
 					 */
@@ -411,8 +442,6 @@ public class CentralizedFileWriter extends ContextAwareBase {
 	public void start() {
 		registeredAppenders++;
 		if (writeWorkers != null) {
-			// addInfo("CentralizedFileWriter started， registered" +
-			// registeredAppenders + "Appenders ");
 			return;
 		}
 
@@ -494,8 +523,8 @@ public class CentralizedFileWriter extends ContextAwareBase {
 		registeredAppenders--;
 		if (registeredAppenders <= 0) {
 			registeredAppenders = 0;
-			alived = false;
+			// alived = false;
 		}
-		closeWorkers(0);
+		// closeWorkers(0);
 	}
 }

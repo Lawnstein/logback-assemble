@@ -19,6 +19,7 @@ import ch.qos.logback.assemble.rolling.AssembleRollingPolicyBase;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.core.encoder.Encoder;
 import ch.qos.logback.core.encoder.LayoutWrappingEncoder;
+import ch.qos.logback.core.rolling.helper.CompressionMode;
 
 /**
  * 
@@ -31,6 +32,7 @@ public class FileItem {
 	public String fileName;
 	public String rollingName;
 	public String activeName;
+	public CompressionMode compressionMode;
 
 	public Charset charset;
 	public boolean append = true;
@@ -45,17 +47,6 @@ public class FileItem {
 	public boolean discardable = false;
 	public int wkid = -1;
 
-	/*
-	 * public FileItem(String fileName, Encoder encoder,
-	 * AssembleRollingPolicyBase rollingPolicy) { super(); curIdx = -1;
-	 * this.fileName = fileName; this.encoder = encoder; this.rollingPolicy =
-	 * rollingPolicy; if (this.encoder != null && this.encoder instanceof
-	 * LayoutWrappingEncoder) { this.charset = ((LayoutWrappingEncoder)
-	 * this.encoder).getCharset(); this.immediateFlush =
-	 * ((LayoutWrappingEncoder) this.encoder).isImmediateFlush(); } this.mq =
-	 * new LinkedBlockingQueue<String>(); this.wkid = -1; }
-	 */
-
 	public FileItem(String fileName, String rollingName, Encoder encoder, AssembleRollingPolicyBase rollingPolicy) {
 		super();
 		curIdx = -1;
@@ -63,6 +54,7 @@ public class FileItem {
 		this.rollingName = rollingName;
 		this.encoder = encoder;
 		this.rollingPolicy = rollingPolicy;
+		this.compressionMode = rollingName == null ? CompressionMode.NONE : determineCompressionMode(this.rollingName);
 		if (this.rollingPolicy != null) {
 			this.append = this.rollingPolicy.isFileAppend();
 		}
@@ -113,6 +105,14 @@ public class FileItem {
 
 	public void setRollingName(String rollingName) {
 		this.rollingName = rollingName;
+	}
+
+	public CompressionMode getCompressionMode() {
+		return compressionMode;
+	}
+
+	public void setCompressionMode(CompressionMode compressionMode) {
+		this.compressionMode = compressionMode;
 	}
 
 	protected Charset getCharset() {
@@ -216,7 +216,7 @@ public class FileItem {
 	public boolean isQueueFullToDiscard(Level level) {
 		if (!isDiscardable())
 			return false;
-		
+
 		int rc = this.mq.remainingCapacity();
 		if (rc == 0) {
 			return true;
@@ -264,6 +264,16 @@ public class FileItem {
 		channel = null;
 		writer = null;
 		file = null;
+	}
+
+	protected CompressionMode determineCompressionMode(String rollingFileName) {
+		if (rollingFileName.endsWith(".gz")) {
+			return CompressionMode.GZ;
+		} else if (rollingFileName.endsWith(".zip")) {
+			return CompressionMode.ZIP;
+		} else {
+			return CompressionMode.NONE;
+		}
 	}
 
 }
