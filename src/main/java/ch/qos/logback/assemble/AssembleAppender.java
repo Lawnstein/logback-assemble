@@ -363,6 +363,7 @@ public class AssembleAppender<E> extends FileAppender<E> {
 			this.output.stop();
 		CentralizedFileWriter.getInstance().stop();
 		this.started = false;
+		
 		super.stop();
 	}
 
