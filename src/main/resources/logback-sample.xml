@@ -46,11 +46,13 @@
 		<!-- <outputType>RingBuffer</outputType> -->
 		<!-- <outputType>BlockQueue</outputType> -->
 		<defaultMDCProperties>TRCODE=X;THREADNO=0;</defaultMDCProperties>
-		<queueSize>10000</queueSize>
-		<discardingThreshold>200</discardingThreshold>		
-		<file>logs/${APPID}/%d{yyyyMMdd}/%X{TRCODE:-TRCODE}_%X{THREADNO:-THREADNO}.log</file>
+		<!-- <defaultMDCLogLevelLabel>LEVEL</defaultMDCLogLevelLabel> -->
+		<!-- <defaultMDCLogLevelValue>INFO</defaultMDCLogLevelValue> -->
+		<!-- <queueSize>10000</queueSize> -->
+		<!-- <discardingThreshold>200</discardingThreshold> -->
+		<file>logs/${APPID}/%d{yyyyMMdd}/%X{TRCODE:-X}_%X{THREADNO:-0}.log</file>
 		<rollingPolicy class="ch.qos.logback.assemble.rolling.NamingAndSizeBasedRollingPolicy">
-			<fileNamePattern>logs/${APPID}/%d{yyyyMMdd}/%X{TRCODE:-TRCODE}_%X{THREADNO:-THREADNO}_%i.log.zip</fileNamePattern>
+			<fileNamePattern>logs/${APPID}/%d{yyyyMMdd}/%X{TRCODE:-X}_%X{THREADNO:-0}.%i.log.zip</fileNamePattern>
 			<maxFileSize>20MB</maxFileSize>
 			<!-- <maxHistory>100</maxHistory> -->
 		</rollingPolicy>

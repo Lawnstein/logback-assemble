@@ -39,7 +39,7 @@ public class NamingAndSizeBasedRollingPolicy extends AssembleRollingPolicyBase {
 
 	public NamingAndSizeBasedRollingPolicy() {
 		super();
-		this.maxHistory = -1;
+		this.maxHistory = Integer.MAX_VALUE;
 	}
 
 	public FileSize getMaxFileSize() {
@@ -141,17 +141,7 @@ public class NamingAndSizeBasedRollingPolicy extends AssembleRollingPolicyBase {
 		this.compressor.setContext(this.context);
 
 		addInfo("Will use the pattern " + this.fileNamePatternWCSes + " for the active file");
-		
-//		this.fileNamePatternStr = Compressor.computeFileNameStrWithoutCompSuffix(fileNamePatternStr, compressionMode);
-//        fileNamePatternWithoutCompSuffix = new FileNamePattern(Compressor.computeFileNameStrWithoutCompSuffix(fileNamePatternStr, compressionMode), this.context);
-//
-//        addInfo("Will use the pattern " + fileNamePatternWithoutCompSuffix + " for the active file");
-//
-//        if (compressionMode == CompressionMode.ZIP) {
-//            String zipEntryFileNamePatternStr = transformFileNamePattern2ZipEntry(fileNamePatternStr);
-//            zipEntryFileNamePattern = new FileNamePattern(zipEntryFileNamePatternStr, context);
-//        }
-        
+		        
 		super.start();
 	}
 

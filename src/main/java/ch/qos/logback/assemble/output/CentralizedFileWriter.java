@@ -88,7 +88,31 @@ public class CentralizedFileWriter extends ContextAwareBase {
 	private String getSimpleFilename(String fileName) {
 		return new File(fileName).getName();
 	}
-	
+
+	private String getUncompressedFilename(String fileName) {
+		if (fileName == null)
+			return fileName;
+		if (fileName.endsWith(".gz"))
+			fileName = fileName.substring(0, fileName.length() - 3);
+		else if (fileName.endsWith(".zip"))
+			fileName = fileName.substring(0, fileName.length() - 4);
+		return fileName;
+	}
+
+	private void rename(FileItem f, String origFileName, String newFileName) {
+		File of = new File(origFileName);
+		if (!of.exists()) {
+			of = null;
+			return;
+		}
+		File nf = new File(newFileName);
+		if (nf.exists())
+			nf.getAbsoluteFile().delete();
+		nf = null;
+
+		f.rollingPolicy.getRenameUtil().rename(origFileName, newFileName);
+	}
+
 	private void openFile(FileItem f) throws Exception {
 		openFile(f, false);
 	}
@@ -124,6 +148,34 @@ public class CentralizedFileWriter extends ContextAwareBase {
 		f.close();
 	}
 
+	private void compress(FileItem f, String innerEntryName) {
+		if (f.compressionMode == CompressionMode.NONE) {
+			return;
+		}
+		String validInnerEntryName = innerEntryName;
+		if (validInnerEntryName == null || validInnerEntryName.length() == 0) {
+			validInnerEntryName = f.activeName;
+		}
+		validInnerEntryName = getUncompressedFilename(validInnerEntryName);
+		String nameOfCompressedFile = f.activeName + "." + System.currentTimeMillis();
+		String fullNameOfCompressedFile = nameOfCompressedFile;
+		switch (f.compressionMode) {
+		case GZ:
+			fullNameOfCompressedFile += ".gz";
+			break;
+		case ZIP:
+			fullNameOfCompressedFile += ".zip";
+			break;
+		}
+		File cf = new File(fullNameOfCompressedFile);
+		if (cf.exists()) {
+			cf.getAbsoluteFile().delete();			
+		}
+		cf = null;
+		getCompressor(f.compressionMode).compress(f.activeName, nameOfCompressedFile, getSimpleFilename(validInnerEntryName));
+		rename(f, fullNameOfCompressedFile, f.activeName);
+	}
+
 	public void checkAndOpenFile(FileItem f) throws Exception {
 		if (f.file == null) {
 			f.curIdx = -1;
@@ -138,27 +190,25 @@ public class CentralizedFileWriter extends ContextAwareBase {
 
 				closeFile(f);
 
-				if (f.compressionMode != CompressionMode.NONE) {
-					getCompressor(f.compressionMode).compress(f.activeName, f.activeName, getSimpleFilename(f.activeName));
-					String nameOfCompressedFile = f.activeName;
-					switch (f.compressionMode) {
-					case GZ:
-						nameOfCompressedFile += ".gz";
-						break;
-					case ZIP:
-						nameOfCompressedFile += ".zip";
-						break;
-					}
-					f.rollingPolicy.getRenameUtil().rename(nameOfCompressedFile, f.activeName);
-				}
-
 				if (nasRollingPolicy.getMaxHistory() <= 0) {
+					/**
+					 * None history configured, just overwrite the original log
+					 * file.
+					 */
 					openFile(f, true);
 				} else if (f.rollingName == null || f.rollingName.length() == 0
 						|| (!f.rollingName.contains("%i") && f.rollingName.equals(f.activeName))) {
+					/**
+					 * rolling fileName = active fileName, just overwrite the
+					 * original log file.
+					 */
 					openFile(f, true);
 				} else if (!f.rollingName.contains("%i") && !f.rollingName.equals(f.activeName)) {
-					f.rollingPolicy.getRenameUtil().rename(f.activeName, f.rollingName);
+					/**
+					 * no rolling policy.
+					 */
+					compress(f, f.rollingName);
+					rename(f, f.activeName, f.rollingName);
 					openFile(f);
 				} else {
 					/**
@@ -183,15 +233,7 @@ public class CentralizedFileWriter extends ContextAwareBase {
 								: f.curIdx + 1); j > 1; j--) {
 							pre = f.rollingName.replaceFirst("%i", (j - 1) + "");
 							nxt = f.rollingName.replaceFirst("%i", (j + ""));
-							File pref = new File(pre);
-							if (pref.exists()) {
-								File nxtf = new File(nxt);
-								if (nxtf.exists())
-									nxtf.getAbsoluteFile().delete();
-								nxtf = null;
-								f.rollingPolicy.getRenameUtil().rename(pre, nxt);
-							}
-							pref = null;
+							rename(f, pre, nxt);
 						}
 					}
 
@@ -200,14 +242,9 @@ public class CentralizedFileWriter extends ContextAwareBase {
 					 */
 					pre = f.activeName;
 					nxt = f.rollingName.replaceFirst("%i", "1");
-					File pref = new File(pre);
-					if (pref.exists()) {
-						File nxtf = new File(nxt);
-						if (nxtf.exists())
-							nxtf.getAbsoluteFile().delete();
-						nxtf = null;
-						f.rollingPolicy.getRenameUtil().rename(pre, nxt);
-					}
+					compress(f, f.activeName + "." + System.currentTimeMillis());
+					rename(f, pre, nxt);
+
 					if (f.curIdx < nasRollingPolicy.getMaxHistory())
 						f.curIdx++;
 
