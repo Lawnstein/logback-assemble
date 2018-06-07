@@ -42,31 +42,6 @@ public class RingBufferedOutput extends AssembleOutputBase {
 	public RingBufferedOutput() {
 	}
 
-	public void stopAllWorker() {
-
-		if (pickWorker != null) {
-			Thread w = pickWorker;
-			pickWorker = null;
-
-			w.interrupt();
-			try {
-				w.join(CentralizedFileWriter.getInstance().maxIdleInterval * 1000);
-				// check to see if the thread ended and if not add a warning
-				// message
-				if (w.isAlive()) {
-					addWarn("Max queue flush timeout (" + CentralizedFileWriter.getInstance().maxIdleInterval
-							+ " seconds) exceeded. Approximately (" + msgWriteCursor + " - " + msgReadCursor + " = "
-							+ (msgWriteCursor.get() - msgReadCursor.get())
-							+ ") queued events were possibly discarded.");
-				}
-			} catch (InterruptedException e) {
-			}
-		}
-
-		msgWriteCursor.set(0L);
-		msgReadCursor.set(0L);
-	}
-
 	private synchronized void activate() {
 		if (alived)
 			return;
@@ -151,7 +126,8 @@ public class RingBufferedOutput extends AssembleOutputBase {
 						CentralizedFileWriter.getInstance().doWriteQue(l);
 						l.clear();
 					}
-
+					
+					stopWorker();
 					addInfo("pickWorker over.");
 				}
 			});
@@ -166,17 +142,20 @@ public class RingBufferedOutput extends AssembleOutputBase {
 			/**
 			 * trig to save file.
 			 */
-			for (int i = 0; i < blockBatchSize; i++) {
-				try {
+			try {
+				for (int i = 0; i <= blockBatchSize; i++) {
 					msgNotifier.countDown();
-				} catch (Throwable th) {
 				}
+			} catch (Throwable th) {
 			}
 		}
 
-		stopAllWorker();
 	}
-
+	
+	private void stopWorker() {
+		this.pickWorker = null;
+	}
+	
 	/*
 	 * (non-Javadoc)
 	 * 

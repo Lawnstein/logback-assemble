@@ -54,28 +54,6 @@ public class BlockingQueuedOutput extends AssembleOutputBase {
 		this.queueCapacity = queueCapacity;
 	}
 
-	public void stopAllWorker() {
-
-		if (pickWorker != null) {
-			Thread w = pickWorker;
-			pickWorker = null;
-
-			w.interrupt();
-			try {
-				w.join(CentralizedFileWriter.getInstance().maxIdleInterval * 1000);
-				// check to see if the thread ended and if not add a warning
-				// message
-				if (w.isAlive()) {
-					addWarn("Max queue flush timeout (" + CentralizedFileWriter.getInstance().maxIdleInterval
-							+ " seconds) exceeded. Approximately " + msgQueue.size()
-							+ " queued events were possibly discarded.");
-				}
-			} catch (InterruptedException e) {
-			}
-		}
-
-	}
-
 	private synchronized void activate() {
 		if (alived)
 			return;
@@ -114,6 +92,7 @@ public class BlockingQueuedOutput extends AssembleOutputBase {
 						CentralizedFileWriter.getInstance().doWriteQue(l);
 						l.clear();
 					}
+					stopWorker();
 					addInfo("pickWorker over.");
 				}
 			});
@@ -123,7 +102,10 @@ public class BlockingQueuedOutput extends AssembleOutputBase {
 
 	public void stop() {
 		alived = false;
-		stopAllWorker();
+	}
+	
+	private void stopWorker() {
+		this.pickWorker = null;
 	}
 
 	/*
