@@ -96,6 +96,7 @@ public class BlockingQueuedOutput extends AssembleOutputBase {
 					addInfo("pickWorker over.");
 				}
 			});
+			pickWorker.setDaemon(true);
 			pickWorker.start();
 		}
 	}

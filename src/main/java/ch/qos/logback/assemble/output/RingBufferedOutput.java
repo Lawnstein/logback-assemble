@@ -126,11 +126,12 @@ public class RingBufferedOutput extends AssembleOutputBase {
 						CentralizedFileWriter.getInstance().doWriteQue(l);
 						l.clear();
 					}
-					
+
 					stopWorker();
 					addInfo("pickWorker over.");
 				}
 			});
+			pickWorker.setDaemon(true);
 			pickWorker.start();
 		}
 	}
@@ -151,11 +152,11 @@ public class RingBufferedOutput extends AssembleOutputBase {
 		}
 
 	}
-	
+
 	private void stopWorker() {
 		this.pickWorker = null;
 	}
-	
+
 	/*
 	 * (non-Javadoc)
 	 * 

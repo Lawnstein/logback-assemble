@@ -45,7 +45,7 @@ public class CentralizedFileWriter extends ContextAwareBase {
 
 	private long registeredAppenders = 0L;
 
-	private int minWorkers = 4;
+	private int minWorkers = 2;
 
 	private int curWorkers = 0;
 
@@ -62,6 +62,8 @@ public class CentralizedFileWriter extends ContextAwareBase {
 	private int pollBatchSize = 1000;
 
 	private boolean alived = false;
+
+	private boolean shutdownHooked = false;
 
 	public CentralizedFileWriter() {
 	}
@@ -169,10 +171,11 @@ public class CentralizedFileWriter extends ContextAwareBase {
 		}
 		File cf = new File(fullNameOfCompressedFile);
 		if (cf.exists()) {
-			cf.getAbsoluteFile().delete();			
+			cf.getAbsoluteFile().delete();
 		}
 		cf = null;
-		getCompressor(f.compressionMode).compress(f.activeName, nameOfCompressedFile, getSimpleFilename(validInnerEntryName));
+		getCompressor(f.compressionMode).compress(f.activeName, nameOfCompressedFile,
+				getSimpleFilename(validInnerEntryName));
 		rename(f, fullNameOfCompressedFile, f.activeName);
 	}
 
@@ -390,6 +393,9 @@ public class CentralizedFileWriter extends ContextAwareBase {
 			} catch (InterruptedException e) {
 			}
 
+			if (!alived) {
+				break;
+			}
 		}
 	}
 
@@ -410,6 +416,7 @@ public class CentralizedFileWriter extends ContextAwareBase {
 						addInfo("CentralizedFileWriter writeWorker-" + wid + " quit.");
 					}
 				});
+				worker.setDaemon(true);
 				writeStatistic[i][0].set(0);
 				writeStatistic[i][1].set(0);
 				writeWorkers[i] = worker;
@@ -428,12 +435,33 @@ public class CentralizedFileWriter extends ContextAwareBase {
 		for (int i = maxWorkers - 1; i >= max; i--) {
 			if (writeWorkers[i] != null) {
 				writeState[i] = false;
+
+				/**
+				 * sleeping.
+				 */
+				if (writeWorkers[i].getState().equals(State.TIMED_WAITING)) {
+					try {
+						writeWorkers[i].interrupt();
+					} catch (Throwable th) {
+					}
+				}
+
 				writeWorkers[i] = null;
 				addInfo("CentralizedFileWriter close writeWorker-" + i);
 			}
 		}
 
 		curWorkers = max;
+		// if (beginPosition == 0) {
+		// writeWorkers = null;
+		// if (healthWorker.getState().equals(State.TIMED_WAITING)) {
+		// try {
+		// healthWorker.interrupt();
+		// } catch (Throwable th) {
+		// }
+		// }
+		// healthWorker = null;
+		// }
 	}
 
 	private void healthExamine() {
@@ -496,72 +524,74 @@ public class CentralizedFileWriter extends ContextAwareBase {
 				writeStatistic[i][0] = new AtomicLong(0);
 				writeStatistic[i][1] = new AtomicLong(0);
 			}
-
 			openWorkers(minWorkers);
+
+			healthWorker = new Thread(new Runnable() {
+				@Override
+				public void run() {
+					Thread.currentThread().setName("Logback-AssembleExaminer");
+					addInfo("CentralizedFileWriter Examiner start.");
+					healthExamine();
+					addInfo("CentralizedFileWriter Examiner quit.");
+				}
+			});
+			healthWorker.setDaemon(true);
+			healthWorker.start();
 		}
 
 		/**
 		 * ShutdownHook
 		 */
-		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-			public void run() {
-				addInfo("shutdown Logback-Assemble");
-				alived = false;
+		if (!shutdownHooked) {
+			Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+				public void run() {
+					addInfo("shutdown Logback-Assemble");
+					alived = false;
 
-				if (healthWorker != null) {
-					healthWorker.interrupt();
-					healthWorker = null;
-				}
+					if (healthWorker != null) {
+						healthWorker.interrupt();
+						healthWorker = null;
+					}
 
-				int ws = writeWorkers.length;
-				while (ws > 0) {
-					ws = 0;
-					for (Thread w : writeWorkers) {
-						if (w == null)
+					for (int i = 0; i < maxWorkers; i++) {
+						Thread w = writeWorkers[i];
+						if (w == null) {
 							continue;
+						}
+						if (w.isInterrupted()) {
+							writeState[i] = false;
+							writeWorkers[i] = null;
+							continue;
+						}
 
-						ws++;
+						writeState[i] = false;
+
 						/**
 						 * sleeping.
 						 */
 						if (w.getState().equals(State.TIMED_WAITING)) {
-							w.interrupt();
+							try {
+								w.interrupt();
+							} catch (Throwable th) {
+							}
 						}
 					}
 
-					if (ws > 0) {
-						try {
-							Thread.sleep(100);
-						} catch (InterruptedException e) {
-						}
-					}
+					doWriteFile(-1);
+					addInfo("Destroyer over.");
 				}
+			}, "Logback-AssembleDestroyer"));
+			shutdownHooked = true;
+			// addInfo("CentralizedFileWriter started， registered" +
+			// registeredAppenders + "Appenders ");
+		}
 
-				doWriteFile(-1);
-				addInfo("Destroyer over.");
-			}
-		}, "Logback-AssembleDestroyer"));
-		// addInfo("CentralizedFileWriter started， registered" +
-		// registeredAppenders + "Appenders ");
-
-		healthWorker = new Thread(new Runnable() {
-			@Override
-			public void run() {
-				Thread.currentThread().setName("Logback-AssembleExaminer");
-				addInfo("CentralizedFileWriter Examiner start.");
-				healthExamine();
-				addInfo("CentralizedFileWriter Examiner quit.");
-			}
-		});
-		healthWorker.start();
 	}
 
 	public void stop() {
 		registeredAppenders--;
 		if (registeredAppenders <= 0) {
 			registeredAppenders = 0;
-			// alived = false;
 		}
-		// closeWorkers(0);
 	}
 }
