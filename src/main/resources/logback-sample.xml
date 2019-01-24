@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 	<property name="APPID" value="myapp" />
+	<property name="LogPath" value="logs" />
 	<property name="StdoutLogLevel" value="ERROR" />
 	<property name="RootLogLevel" value="DEBUG" />
 	<property name="ThirdLogLevel" value="DEBUG" />
@@ -27,14 +28,15 @@
 		</encoder>
 	</appender>
 	<appender name="STDERR" class="ch.qos.logback.assemble.AssembleAppender">
+		<file>${LogPath}/${APPID}/%d{yyyyMMdd}/ERROR</file>
 		<defaultMDCProperties>TRCODE=X;THREADNO=0;</defaultMDCProperties>
 		<filter class="ch.qos.logback.classic.filter.LevelFilter">
 			<level>ERROR</level>
 			<onMatch>ACCEPT</onMatch>
 			<onMismatch>DENY</onMismatch>
-		</filter>
+		</filter>	
 		<rollingPolicy class="ch.qos.logback.assemble.rolling.NamingAndSizeBasedRollingPolicy">
-			<fileNamePattern>logs/${APPID}/%d{yyyyMMdd}/ERROR_%i</fileNamePattern>
+			<fileNamePattern>${LogPath}/${APPID}/%d{yyyyMMdd}/ERROR_%i</fileNamePattern>
 			<maxFileSize>20MB</maxFileSize>
 		</rollingPolicy>
 		<encoder>
@@ -43,16 +45,17 @@
 		</encoder>
 	</appender>
 	<appender name="TRAN" class="ch.qos.logback.assemble.AssembleAppender">
-		<!-- <outputType>RingBuffer</outputType> -->
-		<!-- <outputType>BlockQueue</outputType> -->
-		<defaultMDCProperties>TRCODE=X;THREADNO=0;</defaultMDCProperties>
+		<!-- <defaultMDCProperties>TRCODE=X;THREADNO=0;</defaultMDCProperties> -->
 		<!-- <defaultMDCLogLevelLabel>LEVEL</defaultMDCLogLevelLabel> -->
 		<!-- <defaultMDCLogLevelValue>INFO</defaultMDCLogLevelValue> -->
-		<!-- <queueSize>10000</queueSize> -->
-		<!-- <discardingThreshold>200</discardingThreshold> -->
-		<file>logs/${APPID}/%d{yyyyMMdd}/%X{TRCODE:-X}_%X{THREADNO:-0}.log</file>
+		<!-- <async>false</async> -->
+		<!-- <asyncThreads>1</asyncThreads> -->
+		<!-- <includeCallerData>false</includeCallerData> -->
+		<!-- <queueSize>8092</queueSize> -->
+		<!-- <discardingThreshold>100</discardingThreshold> -->
+		<file>${LogPath}/${APPID}/%d{yyyyMMdd}/%X{TRCODE:-X}_%X{THREADNO:-0}.log</file>
 		<rollingPolicy class="ch.qos.logback.assemble.rolling.NamingAndSizeBasedRollingPolicy">
-			<fileNamePattern>logs/${APPID}/%d{yyyyMMdd}/%X{TRCODE:-X}_%X{THREADNO:-0}.%i.log.zip</fileNamePattern>
+			<fileNamePattern>${LogPath}/${APPID}/%d{yyyyMMdd}/%X{TRCODE:-X}_%X{THREADNO:-0}.%i.log.zip</fileNamePattern>
 			<maxFileSize>20MB</maxFileSize>
 			<!-- <maxHistory>100</maxHistory> -->
 		</rollingPolicy>
@@ -61,8 +64,7 @@
 			<pattern>[%date{HH:mm:ss.SSS}][%-5level][%logger{36}] %msg%n</pattern>
 		</encoder>
 	</appender>
- 	
- 	
+ 	 	
 	<root level="${RootLogLevel}">
 		<appender-ref ref="STDOUT" />
 		<appender-ref ref="STDERR" />

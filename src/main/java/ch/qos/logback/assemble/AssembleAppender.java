@@ -6,8 +6,6 @@
  */
 package ch.qos.logback.assemble;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -15,29 +13,25 @@ import java.util.Map;
 
 import org.slf4j.MDC;
 
-import ch.qos.logback.assemble.output.AssembleOutputBase;
-import ch.qos.logback.assemble.output.BlockingQueuedOutput;
-import ch.qos.logback.assemble.output.CentralizedFileWriter;
-import ch.qos.logback.assemble.output.RingBufferedOutput;
+import ch.qos.logback.assemble.output.FileWriterBase;
+import ch.qos.logback.assemble.output.MessageQueOutput;
 import ch.qos.logback.assemble.rolling.AssembleRollingPolicyBase;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.FileAppender;
 import ch.qos.logback.core.encoder.Encoder;
-import ch.qos.logback.core.encoder.LayoutWrappingEncoder;
-import ch.qos.logback.core.rolling.RollingPolicy;
 import ch.qos.logback.core.spi.FilterReply;
 import ch.qos.logback.core.status.ErrorStatus;
 
 /**
- * .
+ * Assembly appender.
  * 
  * @author Lawnstein.Chan
  * @version $Revision:$
  */
 public class AssembleAppender<E> extends FileAppender<E> {
-	static final int UNDEFINED = -1;
-	
+	private static final int UNDEFINED = -1;
+
 	/**
 	 * the log filename, support name pattern.
 	 */
@@ -71,25 +65,37 @@ public class AssembleAppender<E> extends FileAppender<E> {
 	 */
 	private String defaultMDCLogLevelValue = null;
 
-	private AssembleOutputBase output = null;
-	
-	
 	/**
-	 * the max file message queue size, default unlimited.
+	 * inner output writer.
 	 */
-	private int queueSize = UNDEFINED;
-	
-	/**
-	 * the contition for threshold to discard message , default 20% * $queueSize.<br>
-	 * if remainCapacity less then $discardingThreshold, the discard the TRACE/DEBUG/INFO messages, just keep WARN/ERROR messages.<br>
-	 */
-	private int discardingThreshold = UNDEFINED;
+	private MessageQueOutput output = null;
 
 	/**
-	 * RingBuffer && BlockQueue.
+	 * whether asynchronized logging action.
 	 */
-	private String outputType = "RingBuffer";
-//	private String outputType = "BlockQueue";
+	private boolean asyncFlag = false;
+	
+	private int asyncThreads = 1;
+
+	/**
+	 * When async, whether need to support caller infomation , such as file
+	 * name, line number.<br>
+	 */
+	private boolean includeCallerData = false;
+
+	/**
+	 * When async, the max file message queue size.
+	 */
+	private int queueSize = 8092;
+
+	/**
+	 * When async, <br>
+	 * the contition for threshold to discard message , default 20% *
+	 * $queueSize.<br>
+	 * if remainCapacity less then $discardingThreshold, the discard the
+	 * TRACE/DEBUG/INFO messages, just keep WARN/ERROR messages.<br>
+	 */
+	private int discardingThreshold = UNDEFINED;
 
 	static {
 		MDC.put("Assemble", "true");
@@ -120,29 +126,21 @@ public class AssembleAppender<E> extends FileAppender<E> {
 			((AssembleRollingPolicyBase) this.getRollingPolicy()).setFileAppend(this.isAppend());
 	}
 
-	public String getOutputType() {
-		return outputType;
-	}
-
-	public void setOutputType(String outputType) {
-		this.outputType = outputType;
-	}
-
-	public RollingPolicy getRollingPolicy() {
+	public AssembleRollingPolicyBase getRollingPolicy() {
 		return rollingPolicy;
 	}
 
 	public void setRollingPolicy(AssembleRollingPolicyBase rollingPolicy) {
 		this.rollingPolicy = rollingPolicy;
-		this.initOutput();
-		this.output.setRollingPolicy(this.rollingPolicy);
+		// this.initOutput();
+		// this.output.setRollingPolicy(this.rollingPolicy);
 		if (this.getFile() != null)
 			rollingPolicy.setAppenderFileName(this.getFile());
 		this.rollingPolicy.setFileAppend(this.isAppend());
-		if (this.queueSize != UNDEFINED)
-			this.rollingPolicy.setAppenderQueueSize(this.queueSize);
-		if (this.discardingThreshold != UNDEFINED)
-			this.rollingPolicy.setAppenderDiscardingThreshold(this.discardingThreshold);
+		// if (this.queueSize != UNDEFINED)
+		// this.rollingPolicy.setAppenderQueueSize(this.queueSize);
+		// if (this.discardingThreshold != UNDEFINED)
+		// this.rollingPolicy.setAppenderDiscardingThreshold(this.discardingThreshold);
 	}
 
 	public String getDefaultMDCLogLevelLabel() {
@@ -163,20 +161,12 @@ public class AssembleAppender<E> extends FileAppender<E> {
 
 	public void setEncoder(Encoder<E> encoder) {
 		this.encoder = encoder;
-		this.initOutput();
-		this.output.setEncoder(this.encoder);
 	}
 
-	public void initOutput() {
-		if (this.output == null) {
-			if (getOutputType().equalsIgnoreCase("RingBuffer"))
-				this.output = new RingBufferedOutput();
-			else
-				this.output = new BlockingQueuedOutput();
-			this.output.setContext(this.getContext());
-			CentralizedFileWriter.getInstance().setContext(this.getContext());
-			this.addInfo(this + " OutputType " + getOutputType());
-		}
+	private MessageQueOutput buildOutput() {
+		output = new MessageQueOutput(this, asyncFlag);
+		output.start();
+		return output;
 	}
 
 	public Map<String, String> getDefaultMDCProperties() {
@@ -210,10 +200,34 @@ public class AssembleAppender<E> extends FileAppender<E> {
 			String k = (String) entry.getKey();
 			String v = (String) entry.getValue();
 			if (MDC.get(k) == null) {
-				this.addInfo("Initializing set MDC " + k + "=" + v + " in " + Thread.currentThread().getName());
+				addInfo("Initializing set MDC " + k + "=" + v + " in " + Thread.currentThread().getName());
 				MDC.put(k, v);
 			}
 		}
+	}
+
+	public boolean isAsync() {
+		return this.asyncFlag;
+	}
+
+	public void setAsync(boolean async) {
+		this.asyncFlag = async;
+	}
+
+	public int getAsyncThreads() {
+		return asyncThreads;
+	}
+
+	public void setAsyncThreads(int asyncThreads) {
+		this.asyncThreads = asyncThreads;
+	}
+
+	public boolean isIncludeCallerData() {
+		return includeCallerData;
+	}
+
+	public void setIncludeCallerData(boolean includeCallerData) {
+		this.includeCallerData = includeCallerData;
 	}
 
 	public int getQueueSize() {
@@ -222,13 +236,6 @@ public class AssembleAppender<E> extends FileAppender<E> {
 
 	public void setQueueSize(int queueSize) {
 		this.queueSize = queueSize;
-		if (this.discardingThreshold == UNDEFINED)
-			this.discardingThreshold = this.queueSize / 5;
-		
-		if (this.rollingPolicy != null) {
-			this.rollingPolicy.setAppenderQueueSize(this.queueSize);
-			this.rollingPolicy.setAppenderDiscardingThreshold(this.discardingThreshold);
-		}
 	}
 
 	public int getDiscardingThreshold() {
@@ -237,9 +244,6 @@ public class AssembleAppender<E> extends FileAppender<E> {
 
 	public void setDiscardingThreshold(int discardingThreshold) {
 		this.discardingThreshold = discardingThreshold;
-		if (this.rollingPolicy != null) {
-			this.rollingPolicy.setAppenderDiscardingThreshold(this.discardingThreshold);
-		}
 	}
 
 	public String toString() {
@@ -272,14 +276,14 @@ public class AssembleAppender<E> extends FileAppender<E> {
 
 				if (MDC.get(k) == null) {
 					MDC.put(k, v);
-					this.addInfo("LoggingEvent set MDC " + k + "=" + v + " in " + Thread.currentThread().getName());
+					addInfo("LoggingEvent set MDC " + k + "=" + v + " in " + Thread.currentThread().getName());
 				}
 
 				if (eventMDCMap != null && eventMDCMap.get(k) == null) {
 					if (!eventMDCMap.equals(Collections.EMPTY_MAP)) {
 						try {
 							eventMDCMap.put(k, v);
-							this.addInfo("LoggingEvent set eventMDC " + k + "=" + v + " in "
+							addInfo("LoggingEvent set eventMDC " + k + "=" + v + " in "
 									+ Thread.currentThread().getName());
 						} catch (Throwable e) {
 							addError("put eventMDCMap(" + k + "," + defaultMDCProperties.get(k)
@@ -288,7 +292,7 @@ public class AssembleAppender<E> extends FileAppender<E> {
 									e);
 						}
 					} else {
-						this.addWarn("Unsupported LoggingEvent(" + event.getClass() + ") MDCMap type "
+						addWarn("Unsupported LoggingEvent(" + event.getClass() + ") MDCMap type "
 								+ event.getMDCPropertyMap().getClass() + " in " + Thread.currentThread().getName());
 					}
 				}
@@ -320,7 +324,7 @@ public class AssembleAppender<E> extends FileAppender<E> {
 	@Override
 	protected void append(E eventObject) {
 		if (!(isStarted())) {
-			addError("append have not started, ignore it.", null);
+			addError(this + " append have not started, ignore it.", null);
 			return;
 		}
 
@@ -330,17 +334,14 @@ public class AssembleAppender<E> extends FileAppender<E> {
 
 		try {
 			setThreadDefaultMDC((ILoggingEvent) eventObject);
-			String msg = doEncode(eventObject);
-			String fileName = doActiveFileName(eventObject);
-			String rollingName = doRollingFileName(eventObject, fileName);
-			output.write((ILoggingEvent) eventObject, fileName, rollingName, msg);
+			output.write((ILoggingEvent) eventObject);
 		} catch (Exception e) {
 			addError("append expception", e);
 		}
 	}
 
 	public void start() {
-		this.addInfo(this + " starting ...");
+		addInfo(this + " starting ...");
 		int errors = 0;
 		if (this.encoder == null) {
 			addStatus(new ErrorStatus("No encoder set for the appender named \"" + this.name + "\".", this));
@@ -351,56 +352,24 @@ public class AssembleAppender<E> extends FileAppender<E> {
 			++errors;
 		}
 
+		if (null == buildOutput()) {
+			addStatus(new ErrorStatus("Build output failed.", this));
+			++errors;
+		}
+
 		if (errors == 0) {
-			CentralizedFileWriter.getInstance().start();
+			FileWriterBase.getInstance(this.getContext());
 			this.started = true;
 		}
 	}
 
 	public void stop() {
-		this.addInfo(this + " stopping ...");
-		if (this.output != null)
-			this.output.stop();
-		CentralizedFileWriter.getInstance().stop();
-		this.started = false;
-		
-		
+		addInfo(this + " stopping ...");
+		if (output != null)
+			output.stop();
+		started = false;
+
 		super.stop();
 	}
 
-	public String doEncode(E eventObject) {
-		if (this.encoder instanceof LayoutWrappingEncoder) {
-			return ((LayoutWrappingEncoder) this.encoder).getLayout().doLayout(eventObject);
-		} else {
-			this.addError("unsupported encoder " + encoder.getClass());
-		}
-		return null;
-	}
-
-	public String doActiveFileName(E eventObject) {
-		if (this.rollingPolicy != null)
-			return this.rollingPolicy.getActiveFileName((ILoggingEvent) eventObject);
-		else
-			return this.fileName;
-	}
-
-	public String doRollingFileName(E eventObject, String activeFileName) {
-		if (rollingPolicy == null)
-			return null;
-		if (rollingPolicy.isActiveSamePattern())
-			return activeFileName;
-		return this.rollingPolicy.getRollingFileName((ILoggingEvent) eventObject);
-	}
-
-	public static String getStackTrace(Throwable e) {
-		try {
-			ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
-			e.printStackTrace(new java.io.PrintWriter(buf, true));
-			String stack = buf.toString();
-			buf.close();
-			return stack;
-		} catch (IOException e1) {
-		}
-		return null;
-	}
 }

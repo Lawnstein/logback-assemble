@@ -11,64 +11,61 @@ import java.io.IOException;
 import java.io.Writer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicLong;
 
 import ch.qos.logback.assemble.rolling.AssembleRollingPolicyBase;
-import ch.qos.logback.classic.Level;
+import ch.qos.logback.core.Context;
 import ch.qos.logback.core.encoder.Encoder;
 import ch.qos.logback.core.encoder.LayoutWrappingEncoder;
 import ch.qos.logback.core.rolling.helper.CompressionMode;
+import ch.qos.logback.core.spi.ContextAwareBase;
 
 /**
  * 
  * @author Lawnstein.Chan
  * @version $Revision:$
  */
-public class FileItem {
-	public Encoder encoder;
-	public AssembleRollingPolicyBase rollingPolicy;
-	public String fileName;
-	public String rollingName;
-	public String activeName;
-	public CompressionMode compressionMode;
+public class FileItem extends ContextAwareBase {
+	public Encoder encoder = null;
+	public AssembleRollingPolicyBase rollingPolicy = null;
+	public String fileName = null;
+	public String rollingName = null;
+	public String activeName = null;
+	public CompressionMode compressionMode = CompressionMode.NONE;
+	private long lastConfigured = 0L;
 
-	public Charset charset;
+	public Charset charset = null;
 	public boolean append = true;
 	public boolean immediateFlush = false;
-	public File file;
-	public FileChannel channel;
-	public Writer writer;
-	public long lastModifyTime;
-	public int curIdx;
+	public File file = null;
+	public FileChannel channel = null;
+	public Writer writer = null;
+	public long lastModifyTime = 0L;
+	private AtomicLong token = new AtomicLong(0);
+	public int curIdx = -1;
 
-	public BlockingQueue<String> mq = null;
-	public boolean discardable = false;
-	public int wkid = -1;
+	// public BlockingQueue<String> mq = null;
+	// public boolean discardable = false;
+	// public int wkid = -1;
 
-	public FileItem(String fileName, String rollingName, Encoder encoder, AssembleRollingPolicyBase rollingPolicy) {
+	public FileItem(Context context, String fileName, String rollingName, Encoder encoder,
+			AssembleRollingPolicyBase rollingPolicy) {
 		super();
+		this.setContext(context);
+
 		curIdx = -1;
 		this.fileName = fileName;
-		this.rollingName = rollingName;
-		this.encoder = encoder;
-		this.rollingPolicy = rollingPolicy;
-		this.compressionMode = rollingName == null ? CompressionMode.NONE : determineCompressionMode(this.rollingName);
-		if (this.rollingPolicy != null) {
-			this.append = this.rollingPolicy.isFileAppend();
-		}
-		if (this.encoder != null && this.encoder instanceof LayoutWrappingEncoder) {
-			this.charset = ((LayoutWrappingEncoder) this.encoder).getCharset();
-			this.immediateFlush = ((LayoutWrappingEncoder) this.encoder).isImmediateFlush();
-		}
-		if (rollingPolicy.getAppenderQueueSize() > 0) {
-			this.mq = new ArrayBlockingQueue<String>(rollingPolicy.getAppenderQueueSize());
-			this.discardable = true;
-		} else {
-			this.mq = new LinkedBlockingQueue<String>();
-		}
-		this.wkid = -1;
+
+		update(System.currentTimeMillis(), rollingName, encoder, rollingPolicy);
+
+		// if (rollingPolicy != null && rollingPolicy.getAppenderQueueSize() >
+		// 0) {
+		// this.mq = new
+		// ArrayBlockingQueue<String>(rollingPolicy.getAppenderQueueSize());
+		// this.discardable = true;
+		// } else {
+		// this.mq = new LinkedBlockingQueue<String>();
+		// }
 	}
 
 	public Encoder getEncoder() {
@@ -89,6 +86,7 @@ public class FileItem {
 
 	public void setRollingPolicy(AssembleRollingPolicyBase rollingPolicy) {
 		this.rollingPolicy = rollingPolicy;
+		this.append = this.rollingPolicy.isFileAppend();
 	}
 
 	public String getFileName() {
@@ -105,6 +103,7 @@ public class FileItem {
 
 	public void setRollingName(String rollingName) {
 		this.rollingName = rollingName;
+		this.compressionMode = rollingName == null ? CompressionMode.NONE : determineCompressionMode(this.rollingName);
 	}
 
 	public CompressionMode getCompressionMode() {
@@ -179,21 +178,21 @@ public class FileItem {
 		this.channel = channel;
 	}
 
-	public int getCurIdx() {
-		return curIdx;
-	}
+//	public int getCurIdx() {
+//		return curIdx;
+//	}
+//
+//	public void setCurIdx(int curIdx) {
+//		this.curIdx = curIdx;
+//	}
 
-	public void setCurIdx(int curIdx) {
-		this.curIdx = curIdx;
-	}
-
-	public BlockingQueue<String> getMq() {
-		return mq;
-	}
-
-	public void setMq(BlockingQueue<String> mq) {
-		this.mq = mq;
-	}
+	// public BlockingQueue<String> getMq() {
+	// return mq;
+	// }
+	//
+	// public void setMq(BlockingQueue<String> mq) {
+	// this.mq = mq;
+	// }
 
 	public String getActiveName() {
 		return activeName;
@@ -203,9 +202,9 @@ public class FileItem {
 		this.activeName = activeName;
 	}
 
-	public boolean isDiscardable() {
-		return discardable;
-	}
+	// public boolean isDiscardable() {
+	// return discardable;
+	// }
 
 	/**
 	 * check whether to discard the current message with level.
@@ -213,25 +212,25 @@ public class FileItem {
 	 * @param level
 	 * @return
 	 */
-	public boolean isQueueFullToDiscard(Level level) {
-		if (!isDiscardable())
-			return false;
+	// public boolean isQueueFullToDiscard(Level level) {
+	// if (!isDiscardable())
+	// return false;
+	//
+	// int rc = this.mq.remainingCapacity();
+	// if (rc == 0) {
+	// return true;
+	// } else if (this.rollingPolicy.isQueueBelowDiscardingThreshold(rc)) {
+	// if (level == null)
+	// return false;
+	// if (level.isGreaterOrEqual(Level.WARN))
+	// return true;
+	// }
+	// return false;
+	// }
 
-		int rc = this.mq.remainingCapacity();
-		if (rc == 0) {
-			return true;
-		} else if (this.rollingPolicy.isQueueBelowDiscardingThreshold(rc)) {
-			if (level == null)
-				return false;
-			if (level.isGreaterOrEqual(Level.WARN))
-				return true;
-		}
-		return false;
-	}
-
-	public void setDiscardable(boolean discardable) {
-		this.discardable = discardable;
-	}
+	// public void setDiscardable(boolean discardable) {
+	// this.discardable = discardable;
+	// }
 
 	public void write(String message) throws IOException {
 		if (writer != null) {
@@ -276,4 +275,50 @@ public class FileItem {
 		}
 	}
 
+	public boolean lock(long stamp) {
+		if (stamp <= 0) {
+			stamp = System.currentTimeMillis();
+		}
+		boolean r = token.compareAndSet(0L, stamp);
+		if (r) {
+			return true;
+		}
+		long currStamp = System.currentTimeMillis();
+		while (!r) {
+			stamp = System.currentTimeMillis();
+			if (stamp - currStamp > 30000) {
+				return false;
+			}
+			r = token.compareAndSet(0L, stamp);
+		}
+		return r;
+	}
+
+	public void unlock() {
+		token.set(0L);
+	}
+
+	public void update(long stamp, String rollingName, Encoder encoder, AssembleRollingPolicyBase rollingPolicy) {
+		if (lastConfigured > 0L && stamp - lastConfigured < 10000L) {
+			return;
+		}
+
+		if (rollingName != null && !rollingName.equals(this.rollingName)) {
+			if (this.rollingName != null)
+				addInfo("Configure for [" + this.fileName + "] rollingName changed to " + this.rollingName);
+			setRollingName(rollingName);
+		}
+		if (encoder != null && encoder != this.encoder) {
+			if (this.encoder != null)
+				addInfo("Configure for [" + this.fileName + "] encoder changed");
+			setEncoder(encoder);
+		}
+		if (rollingPolicy != null && rollingPolicy != this.rollingPolicy) {
+			if (this.rollingPolicy != null)
+				addInfo("Configure for [" + this.fileName + "] rollingPolicy changed");
+			setRollingPolicy(rollingPolicy);
+		}
+
+		lastConfigured = stamp;
+	}
 }

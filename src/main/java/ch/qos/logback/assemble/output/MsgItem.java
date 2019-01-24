@@ -31,7 +31,8 @@ public class MsgItem {
 		this.rollingPolicy = rollingPolicy;
 	}
 
-	public MsgItem(String fileName, String rollingName, String message, Encoder encoder, AssembleRollingPolicyBase rollingPolicy) {
+	public MsgItem(String fileName, String rollingName, String message, Encoder encoder,
+			AssembleRollingPolicyBase rollingPolicy) {
 		super();
 		this.fileName = fileName;
 		this.rollingName = rollingName;
@@ -40,7 +41,8 @@ public class MsgItem {
 		this.rollingPolicy = rollingPolicy;
 	}
 
-	public MsgItem(String fileName, String rollingName, String message, Level level, Encoder encoder, AssembleRollingPolicyBase rollingPolicy) {
+	public MsgItem(String fileName, String rollingName, String message, Level level, Encoder encoder,
+			AssembleRollingPolicyBase rollingPolicy) {
 		super();
 		this.fileName = fileName;
 		this.rollingName = rollingName;
@@ -49,7 +51,7 @@ public class MsgItem {
 		this.encoder = encoder;
 		this.rollingPolicy = rollingPolicy;
 	}
-	
+
 	public String getFileName() {
 		return fileName;
 	}

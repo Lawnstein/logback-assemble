@@ -1,3 +1,6 @@
 /target/
 /.settings
 /logs/
+/build.xml
+/.classpath
+/.project
